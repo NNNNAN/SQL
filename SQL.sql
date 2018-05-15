@@ -105,3 +105,10 @@ SELECT region,
 FROM orders
 WHERE region IN (SELECT region FROM top_regions)
 GROUP BY region, product;
+
+
+
+
+
+
+YYYYYYYYYYYYYYYYYYYY

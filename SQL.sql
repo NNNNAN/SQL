@@ -13,10 +13,11 @@ VALUES ('HTML01', 'HTML Unleashed', 19.00, '08-07-2010'),
 	    ('JS01', null , 22.00, '01-05-2010');
 
 INSERT INTO id_pid (id, pid)
-SELECT id, null as pid FROM id_pid_view a
+SELECT id, null as pid 
+FROM id_pid_view a
 WHERE NOT EXISTS (SELECT id FROM id_pid b WHERE a.id=b.id);
 
-SELECT last_updated_dt INTO ail_update_date FROM gsat.ais_national_counts;
+SELECT last_updated_dt INTO ail_update_date FROM table_a;
 
 UPDATE book SET price = 19.49 WHERE price = 25.00;
 UPDATE TABLE_A A
@@ -38,7 +39,7 @@ ALTER TABLE orders ADD CONSTRAINT item_vendor_ukey UNIQUE (item_code,vendor_code
 -- If we want to fetch unique designame from the employee table
 SELECT DISTINCT designame FROM employee;
 -- DISTINCT ON CGMID AND PHONETYPEID
-SELECT DISTINCT on (cgmid, phonetypeid) cgmid, phonetypeid, unformattedphone
+SELECT DISTINCT ON (cgmid, phonetypeid) cgmid, phonetypeid, unformattedphone FROM employee;
 
 -- The NULL value sorts higher than the other value. 
 -- When sort order is ascending the NULL value comes at the end 

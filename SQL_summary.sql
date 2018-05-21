@@ -3,12 +3,14 @@
 inner join 和rank over
 两个表left join，count一下加上group by
 calculate precision
-
+CASE WHEN => SUM
+the "/" operator does integer division: 1::float/3
+unique pair counting problem，ratio
 	
 rucliuwenhui
 2018-5-2 06:33
 -------------------------------------------
-给了4个table：
+
 products（product_id, product_class_id, brand_name, price） 
 sales(product_id, promotion_id, cutomer_id, total_sales)
 customer(customer_id, ...)，还有一个忘记了。。
@@ -17,13 +19,14 @@ Q1/2:只用一个table group by，order by就能出结果 有一题order by忘�
 Q3: 是问买过productA and productB的所有customer。
 我这题用了两个join，感觉写的有点长，应该有更好的写法，但一时没想起来。小哥让我想想如果product多于两个，比如五个，应该怎么写。
 SELECT distinct(customer_id) FROM sales WHERE product_id = (SELECT product_id FROM products WHERE );
+
 ------------------------------------------
-member_id, company_name, start_year
+
 DROP TABLE IF EXISTS work_history;
 CREATE TABLE work_history (
 	member_id int,
-    company_name text,
-    start_year int
+   company_name text,
+   start_year int
 );
 
 INSERT INTO work_history VALUES (1,'Microsoft',2010),(1,'xxx',2011),(1,'Google',2012);
@@ -53,54 +56,103 @@ Q2: count members who directly moved from Microsoft to Google? (Microsoft - Link
 	  AND b.company_name = 'Google';
 
 ---------------------------------------------
-表名：survey_log 列名：user_id, question_id, question_order, event = {saw, answered, skipped}, timestamp
-DROP TABLE IF EXISTS survey_log;
-CREATE TABLE survey_log (
-	user_id int,
-    question_id int,
-    question_order int,
-    event varchar(10)
-);
-
 刚加入的用户会要求填一份调查问卷，但问卷里的问题也可以跳过，每道题只要被用户见到就会生成一条记录（event为saw)
 如果被回答或者被跳过会生成另一条数据（即每道题每个用户都会有两条记录），回答则event为answered，跳过即为skip
 并且每道题出现在每个用户前的顺序有可能不同，所以有question_order。
-Q1: 假设该表里已经存了1M用户的数据，在一个新用户进来时，如何安排题目尽可能多地得到新用户的答案，减少skip？ 
-	求了个每道题的回答率，注意不能只求回答次数，要除以总的看见此题的次数 
-	SELECT question_id, SUM(CASE WHEN event = 'answered' THEN 1 ELSE 0 END)/SUM(CASE WHEN event = 'saw' THEN 1 ELSE 0 END)
+
+DROP TABLE IF EXISTS survey_log;
+CREATE TABLE survey_log (
+	user_id int,
+   question_id int,
+   question_order int,
+   event varchar(10)
+   -- timestamp
+);
+
+INSERT INTO survey_log VALUES (1,10,1,'saw');
+INSERT INTO survey_log VALUES (1,10,1,'skiped');
+INSERT INTO survey_log VALUES (1,11,2,'saw');
+INSERT INTO survey_log VALUES (1,11,2,'answered');
+INSERT INTO survey_log VALUES (2,10,1,'saw');
+INSERT INTO survey_log VALUES (2,10,1,'skiped');
+INSERT INTO survey_log VALUES (2,11,2,'saw');
+INSERT INTO survey_log VALUES (2,11,2,'skiped');
+INSERT INTO survey_log VALUES (3,10,1,'saw');
+INSERT INTO survey_log VALUES (3,10,1,'answered');
+INSERT INTO survey_log VALUES (4,12,1,'saw');
+INSERT INTO survey_log VALUES (4,12,1,'skiped');
+INSERT INTO survey_log VALUES (5,10,1,'saw');
+INSERT INTO survey_log VALUES (5,10,1,'skiped');
+INSERT INTO survey_log VALUES (5,14,2,'saw');
+INSERT INTO survey_log VALUES (5,14,2,'answered');
+
+
+Q1: 假设该表里已经存了1M用户的数据，在一个新用户进来时，如何安排题目尽可能多地得到新用户的答案，减少skip？ 求了个每道题的回答率，注意不能只求回答次数，要除以总的看见此题的次数 
+	SELECT question_id, ROUND(CAST(SUM(CASE WHEN event = 'answered' THEN 1 ELSE 0 END)::float/SUM(CASE WHEN event = 'saw' THEN 1 ELSE 0 END) AS NUMERIC),2) AS rate
 	FROM survey_log
 	GROUP BY question_id
-	ORDER BY SUM(CASE WHEN event = 'answered' THEN 1 ELSE 0 END)/SUM(CASE WHEN event = 'saw' THEN 1 ELSE 0 END) DESC;
+	ORDER BY rate DESC;
 
 Q2: 即使按照回答率对题目进行排序，如果新来的用户已经skip掉了回答率最高和次高的题，如何动态调整题目顺序，获得此用户尽可能多的回答？ 
 	 条件概率，要看用户之间的相似度，即已有数据中跳过了这两道题的用户回答率最高的是哪道……
 	 
-	 这个题目估计用python会好一些。其实就是条件概率，比如一个user回答了某个问题，那么接下来他回答后面问题的概率分别都是多少，
-	 我觉得用sql，只能用一个具体例子，比如回答了问题1以后，跟他一样回答了问题1的用户，回答后面那些问题的概率都是多少
+	 这个题目估计用python会好一些。其实就是条件概率，比如一个user回答了某个问题，那么接下来他回答后面问题的概率分别都是多少，我觉得用sql，只能用一个具体例子，比如回答了问题1以后，跟他一样回答了问题1的用户，回答后面那些问题的概率都是多少
 --------------------------------------------
-FB在某邮件注册以后会选择短信验证，只有短信验证了才能使用，这样有两个table：
+邮件注册以后会选择短信验证，只有短信验证了才能使用，这样有两个table：
 
 email table: time, user_id, email_id;
 text table: time, user_id, text_id, action(验证or没有验证）
 
+DROP TABLE IF EXISTS email_yz;
+CREATE TABLE email_yz (
+	time TIMESTAMP,
+    user_id int,
+    email_id int
+);
+DROP TABLE IF EXISTS text_yz;
+CREATE TABLE text_yz (
+	time TIMESTAMP,
+    user_id int,
+    text_id int,
+    action varchar(5)
+);
+
+INSERT INTO email_yz VALUES ('2004-10-19 10:23:54',1,10);
+INSERT INTO email_yz VALUES ('2004-10-19 10:23:54',2,11);
+INSERT INTO email_yz VALUES ('2004-10-19 11:23:54',3,12);
+INSERT INTO email_yz VALUES ('2004-10-19 11:23:54',4,13);
+INSERT INTO email_yz VALUES ('2004-11-19 11:23:54',5,14);
+INSERT INTO email_yz VALUES ('2004-11-19 11:23:54',6,15);
+INSERT INTO email_yz VALUES ('2004-11-19 11:23:54',7,16);
+INSERT INTO email_yz VALUES ('2004-11-19 11:23:54',8,17);
+INSERT INTO text_yz VALUES ('2004-10-19 11:23:54',1,21,'YZ');
+INSERT INTO text_yz VALUES ('2004-10-19 11:23:54',2,22,'NYZ');
+INSERT INTO text_yz VALUES ('2004-10-19 12:23:54',3,23,'YZ');
+INSERT INTO text_yz VALUES ('2004-10-19 12:23:54',4,24,'NYZ');
+INSERT INTO text_yz VALUES ('2004-11-19 12:23:54',5,25,'NYZ');
+INSERT INTO text_yz VALUES ('2004-11-19 12:23:54',6,26,'YZ');
+INSERT INTO text_yz VALUES ('2004-11-20 12:23:54',7,27,'YZ');
+INSERT INTO text_yz VALUES ('2004-11-20 12:23:54',8,28,'NYZ');
+
 Q1: 每天大概有多少注册邮件
-SELECT COUNT(*)/COUNT(DISTINCT(time::date)) FROM Email;
+	SELECT COUNT(*)/COUNT(DISTINCT(CAST(time AS DATE))) FROM email_yz;
 
 Q2: 注册的人大概有多少通过了短信验证
-SELECT COUNT(distinct(user_id)) FROM test WHERE action = 'YZ';
+	SELECT COUNT(distinct(user_id)) FROM text_yz WHERE action = 'YZ';
 
 Q3: 有多少人注册当天没有验证成功，第二天才验证成功
-SELECT COUNT(distinct(email.user_id))
-FROM email, text
-WHERE email.user_id = text.user_id
-  AND text.time::date - email.time::date = 1
-  AND text.action = 'YZ';
+	SELECT COUNT(distinct(em.user_id))
+	FROM email_yz em, text_yz sms
+	WHERE em.user_id = sms.user_id
+	AND sms.action = 'YZ'
+	AND CAST(sms.time AS DATE) - 1 = CAST(em.time AS DATE);
 
 Q4: 可能还有一问是平均注册到验证大概有多少时间
-SELECT AVG(text.time - email.time)
-FROM email, text 
-WHERE email.user_id = text.user_id
-  AND text.action = 'YZ';
+	SELECT AVG(sms.time - em.time)
+	FROM email_yz em, text_yz sms
+	WHERE sms.action = 'YZ'
+	AND   em.user_id = sms.user_id;
+
 -------------------------------------------------------------------
 有两张的table(一个月一张)，key是account_num，变量account_type(check or save or save+check三类), date（by day）
 Q1-x: 简单的groupby orderby算一下三类account有多少
@@ -121,6 +173,10 @@ t1(user_name, sports_category)------------ t1中只有celebrity运动员。pk=us
 t2(user_id, user_name, registration_date)----------t2中是所有人的用户信息，包括celebrity和普通人，且不会出现celebrity和普通人重名的情况（重要假设）。pk=user_id
 t3(user_id, user_id_following, follow_date)----用户follow信息，注意user_id_following中包括celebrity和普通人 
 Q1: 计算每个category有多少人follow
+(这里要注意第三个table 是followees 是id; followers是id_following
+也就是join这table 2 和3 应该是用B.id = C.id_following
+还要考虑是否用left join还是inner join)
+
 SELECT sports_category ,COUNT(*) FROM (
 	SELECT user_id_following, COUNT(user_id_following)
 	FROM t2
@@ -230,6 +286,8 @@ insert into content_actions VALUES (1,5,'post',null),
 	                                (17,6,'photo',null),
 	                                (16,20,'comment',5),
 	                                (2,10,'post',null);
+1）每个content 的comment的distribution
+2） 每个content type 的content 的comment的distribution
 
 Q1: Generate a distribution for the #comments per story ( what is the distribution of comments?) !!!!!! DISTRIBUTION
 SELECT a.content_id, CASE WHEN tot_comment IS NULL THEN 0 ELSE tot_comment END AS tot_com
@@ -378,10 +436,138 @@ SELECT B.member_id, A.email, B.email
 FROM table A, table B
 WHERE A.member_id = B.member_id
   AND A.email <> B.email;
+------------------------------------------------------------------------
+两道sql题，给了三个table，一个empt, 一个dept,一个empt_dept，然后让找出一个特定id的employee的部门名字.
+SELECT dept.name 
+FROM dept
+INNER JOIN empt_dept
+ON dept.dept_id = empt_dept.dept_id
+INNER JOIN empt
+ON empt.empt_id = empt_dept.empt_id
+WHERE empt.empt_id = 1;
+
+然后计算在这个部门有多少个active employee
+
+SELECT COUNT(DISTINCT(empt_id)) 
+FROM empt
+INNER JOIN empt_dept
+ON empt.empt_id = empt_dept.empt_id
+WHERE empt_dept.dept_id = xxxxx;
+--------------------------------------------------------------------------
+第一道的table：
+sales : product_id, quantity
+products : product_id, name
+
+Q1: output：name ，quantity
+	SELECT name, CASE WHEN quantity IS NULL THEN 0 END AS final_quantity
+	FROM sales
+	RIGHT JOIN products
+	ON sales.product_id = products.product_id;
+
+第2道其他面经也出现了，不赘述了：
+article_views: view_date, viewer_id, article_id, author_id
 
 
 
+member_id, email_address
+一个member 可能有2个email address
+output：memeber id，email1，email2
+WITH new_table AS (SELECT member_id, email_address, ROW_NUMBER() OVER(PARTITION BY member_id ORDER BY email_address))
+SELECT member_id, a.email_address, b.email_address
+FROM new_table a
+LEFT JOIN (SELECT * FROM new_table WHERE ROW_NUMBER = 2) b 
+ON a.member_id = b.member_id
+WHERE a.ROW_NUMBER;
+----------------------------------------------------------------
+求具体某一天的friend request acceptance rate 
+time | date | action | actor_uid | target_uid
 
+----------------------------------------------------------------
+
+Given table for purchase activity and signup event
+Questions: for Weekly new users, whats:
+Q1: The activation rate in the 1st week within signup time
+Q2: Retention rate in the 1st 
+Answers: left join, group by user and week, de-duplicat
+
+SELECT SUM(CASE WHEN p.user_id IS NOT NULL THEN 1 ELSE 0)::float/COUNT(DISTINCT(s.user_id))
+FROM signup s 
+LEFT JOIN purchase p 
+ON p.user_id = s.user_id 
+WHERE purchase_date - s.date <=7
+GROUP BY p.user_id s.user_id; 
+--------------------------------------------------------------
+
+两个table users and reviews，每个user为是否为禁止状态，是支付方还是接收方，每个review有支付方 接收方 日期 是否cancel。
+输出：按日期分组，未被禁止的接收方的review的取消率
+--------------------------------------------------------------
+
+table 1
+id, first_name, last_name,gender,D.O.B,hiring_time
+
+table 2.
+id, 2012_salary, 2013_salary,2014_salary (有nulls)
+
+Q1: list the salary information for the male employees who were hired in 2014 in ascending order by employee last name
+SELECT *
+FROM table_2
+INNER JOIN table_1
+ON table_1.id = table_2.id
+WHERE EXTRACT(YEAR FROM table_1.hiring_time) = 2014
+  AND table_1.gender = 'MALE'
+ORDER BY table_1.last_name;
+
+Q2: point out one potential issue in the result of the query above?
+--------------------------------------------------------------
+
+一个广告table，每行primary key是时间和广告ID，列是timestamp，adsID，publisherID，还有广告价格
+另一个table是该广告有多少人看见，多少人点击。列是timestamp，adsID，#views，#clicks 吧，
+反正就是很基本的求某天某广告商的convertion rate------------------------------------->>>>>>>>>>????????????
+
+SELECT CASE WHEN view IS NULL THEN 0 ELSE COUNT(clicks)::float/COUNT(views) END AS conversion_rate
+FROM table_1 
+LEFT JOIN table2
+ON table_1.adsID = table_2.adsID 
+AND EXTRACT(DATE FROM table_1.timestamp) = EXTRACT(DATE FROM table_2.timestamp)
+WHERE EXTRACT(DATE FROM table_1.timestamp) = current_date
+GROUP BY publisherID;
+
+--------------------------------------------------------------------
+id,  name
+1,mike
+2,mike
+3,mike
+4,peter
+5,lily
+返回所有可能的相同名字的id的组合（2个一组），output ： id_1,id_2,name
+
+DROP TABLE IF EXISTS id_2;
+CREATE TABLE id_2 (
+	id int,
+	name char(10)
+);
+
+INSERT INTO id_2 VALUES (1,'mike'),(2,'mike'),(3,'mike'),(4,'peter'),(5,'lily');
+
+SELECT a.id, b.id, a.name
+FROM id_2 a, id_2 b 
+WHERE a.name = b.name
+AND a.id <> b.id
+AND a.id < b.id;
+
+SELECT a.id, b.id, a.name
+FROM id_2 a, id_2 b 
+WHERE a.name = b.name
+AND a.id <> b.id;
+
+-- WHAT IF IT'S A B C
+
+SELECT a.id, b.id, a.name
+FROM id_2 a, id_2 b 
+WHERE a.name = b.name
+AND a.id <> b.id;
+
+这个用到out join
 
 
 
@@ -684,6 +870,29 @@ GROUP BY num_comment;
 
 
 
+drop table if exists joins_test;
+create table joins_test  (id_1 int, id_2 int);
+insert into joins_test values (1,10),(1,11),(1,10),(2,10),(2,11);
+
+select * from joins_test;
+-- TEST 1 => dups = 13 = 9+2
+select * from joins_test a
+inner join joins_test b
+on a.id_1 = b.id_1;
+
+select COUNT(a.id_1) from joins_test a
+right join joins_test b
+on a.id_1 = b.id_1;
+
+-- TEST 2 => dups
+select * from joins_test a
+right join (select * from joins_test where id_1 = 1) b
+on a.id_1 = b.id_1;
+
+-- TEST 3 => if you want to dup then don't merge dups with dups
+select * from joins_test a
+left join (select distinct(id_1) from joins_test) b
+on a.id_1 = b.id_1;
 
 
 
@@ -691,21 +900,7 @@ GROUP BY num_comment;
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+country | duration(s)
 
 
 

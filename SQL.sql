@@ -58,6 +58,8 @@ FULL JOIN
 
 ------------------WINDOW FUNCTION --------------
 -- use of a window function does not cause rows to become grouped into a single output row — the rows retain their separate identities.
+SELECT rest_id, ROW_NUMBER() OVER (ORDER BY rest_id) as row_num FROM Location;
+
 -- RANK
 SELECT rest_id, RANK() OVER (ORDER BY rest_id) as all_rank FROM location;
 SELECT rest_id, RANK() OVER (ORDER BY parent_region_id) as region_rank FROM location; --- !!!! bie jia rest_id
@@ -106,10 +108,3 @@ SELECT region,
 FROM orders
 WHERE region IN (SELECT region FROM top_regions)
 GROUP BY region, product;
-
-
-
-
-
-
-YYYYYYYYYYYYYYYYYYYY

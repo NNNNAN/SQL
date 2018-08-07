@@ -1,59 +1,9 @@
 什么friend request这种经常要两个col换个顺序然后union，
 然后sum case when和ifnull注意就行 => other
-inner join 和rank over
-两个表left join，count一下加上group by
 calculate precision
 CASE WHEN => SUM
 the "/" operator does integer division: 1::float/3
 unique pair counting problem，ratio
-	
-rucliuwenhui
-2018-5-2 06:33
--------------------------------------------
-
-products（product_id, product_class_id, brand_name, price） 
-sales(product_id, promotion_id, cutomer_id, total_sales)
-customer(customer_id, ...)，还有一个忘记了。。
-
-Q1/2:只用一个table group by，order by就能出结果 有一题order by忘了加desc
-Q3: 是问买过productA and productB的所有customer。
-我这题用了两个join，感觉写的有点长，应该有更好的写法，但一时没想起来。小哥让我想想如果product多于两个，比如五个，应该怎么写。
-SELECT distinct(customer_id) FROM sales WHERE product_id = (SELECT product_id FROM products WHERE );
-
-------------------------------------------
-
-DROP TABLE IF EXISTS work_history;
-CREATE TABLE work_history (
-	member_id int,
-   company_name text,
-   start_year int
-);
-
-INSERT INTO work_history VALUES (1,'Microsoft',2010),(1,'xxx',2011),(1,'Google',2012);
-INSERT INTO work_history VALUES (2,'Google',2010),(2,'xxx',2011),(2,'Microsoft',2012);
-INSERT INTO work_history VALUES (3,'Microsoft',2010),(3,'xxx',2011);
-INSERT INTO work_history VALUES (4,'Google',2012);
-INSERT INTO work_history VALUES (5,'Microsoft',2010),(5,'Google',2012);
-
-Q1: count members who ever moved from Microsoft to Google? (如果有人从M跳到L然后调到G也算，只要现在M工作过,然后在G工作就算)
-
-	SELECT count(distinct(a.member_id))
-	FROM work_history a, work_history b
-	WHERE a.member_id = b.member_id
-	  AND a.start_year < b.start_year
-	  AND a.company_name = 'Microsoft'
-	  AND b.company_name = 'Google';
-
-Q2: count members who directly moved from Microsoft to Google? (Microsoft - Linkedin - Google doesnt count)
-
-	WITH new_table AS (
-		SELECT *, ROW_NUMBER() OVER(PARTITION BY member_id ORDER BY start_year) AS new_order FROM work_history)
-	SELECT count(distinct(a.member_id))
-	FROM new_table a, new_table b 
-	WHERE a.member_id = b.member_id
-	  AND a.new_order + 1 = b.new_order
-	  AND a.company_name = 'Microsoft'
-	  AND b.company_name = 'Google';
 
 ---------------------------------------------
 刚加入的用户会要求填一份调查问卷，但问卷里的问题也可以跳过，每道题只要被用户见到就会生成一条记录（event为saw)
@@ -199,24 +149,11 @@ WHERE a.userid1 = b.userid2
   AND a.userid2 = b.userid1
   AND a.xxxxxxx = 'friend'
   AND b.xxxxxxx = 'friend';
------------------------------------------------------------------
-product: pruduct_id, brand_id, class_id, ....
-customers: customer_id, state, ... 
-sales: product_id, customer_id, product_id, sales_amount, price..... 
-stores: store_id, ...... 
-
-问题和地理之前的有差别，但是核心内容是一样的GROUP BY, INNER JOIN, OUTER JOIN, Condition Statements. 
-??????????????????????????
 ------------------------------------------------------------------
 就是一个customer table, 一个viewtable,  然后join 啊。 
 问多少account id viewing大于3个小时。 就是有个tricky地方， join 的时候有些accountid, 虽然signup 了但是没有view,所以没有在customertable 出现。 是null 的。 
 这个被问了， 当时还不知道出什么问题了 。 不过后来也是解决了。
-------------------------------------------------------------------
-一道返回每个学生的最高分，重复按course id。。另一道算running total. 
-SELECT STUDENT_ID, MAX(score) 
-FROM table
-GROUP BY STUDENT_ID
-ORDER BY STUDENT_ID;
+
 ------------------------------------------------------------------
 date | u1 | u2 | n_msg
 每行是一对unique user pair之间在某天发的消息数量, 注意，小明和小红分别出现在user_a和user_b的话，就不会出现另一对小红和小明分别在user_a和user_b
@@ -252,19 +189,7 @@ GROUP BY week;
 SELECT id, category, COUNT(DISTINCT(follower_id))
 FROM table
 WHERE id = 'xxxxxx' AND category = 'xxxxxxx';
----------------------------------------------------------------
-sort按照字母规律，不过要求先把S排在最前
 
-drop table if exists sort_test;
-create table sort_test (index text);
-insert into sort_test VALUES ('a');
-insert into sort_test VALUES ('b');
-insert into sort_test VALUES ('s');
-insert into sort_test VALUES ('S');
-
-SELECT * 
-FROM sort_test
-ORDER BY CASE WHEN index in ('S','s') THEN 0 ELSE 1, index;
 ----------------------------------------------------------------
 给我一个用户记录的表。 日期， 用户名， 活动(登录)  设计一个发日/周月积极用户的表。  
 我开始用三个sql 来做。 但即使 扫30 天的数据也很多 。   
@@ -572,11 +497,6 @@ AND a.id <> b.id;
 
 
 
-
-
-/***************************************************************/
-
-
 /*************** LINKEDIN 1 **************/ 
 table1: campaigns
 Account_id (AID) |Campaign_id (CID)
@@ -715,62 +635,6 @@ FROM world w
 	WHERE w.continent = m.continent AND w.population = m.max_pop
 
 
-/*************** LINKEDIN 1 **************/ 
-6. table member_id|company_name|year_start
-Q1: count members who ever moved from Microsoft to Google?
-
-SELECT count(distinct t1.member_id)
-FROM table t1  join table t2 on t1.member_id = t2.member_id
-WHERE t1.year_start < t2.year_start
-AND t1.company_name = "microsoft" AND t2.company_name ="google"; 
-
-R:
-
-count <- inner_join(table, table, by="member_id") %>%
-filter(year_start.x < year_start.y) %>%
-filter(company_name.x ="microsoft") %>%
-filter(compnay_name.y ="google") %>%
-summarise(count =n())
-
-print count
-
-
-Q2:  count members who directly moved from Microsoft to Google? (Microsoft -- Linkedin -- Google doesn't count)
-
-SQL: 
-
-SELECT COUNT(DISTINCT member_id)
-FROM 
-	(SELECT t1.member_id member_id, t1.company, company1, t1.start_year startyear1, t2.company company2, t2.start_year startyear2
-	FROM table t1 join table t2 
-	GROUP BY t1.member_id
-	HAVING count(t1.member_id) = 4) l
-	WHERE l1.startyear1 <l1.startyear2
-	AND t1.company_name = "microsoft" AND t2.company_name ="google"; 
-
-/*************** LINKEDIN 1 **************/ 
-7. table
-customer | product | amount 
-1         A          x1
-1         B          x2
-1         C          x3
-2         A          y1
-2         B          y2
-2         C          y3
-3         A          z1
-3         B          z2
-3         C          z3
-
-如何输出table,每行 customer, product.A, poduct.B, product.C
-                    1        x1          x2          x3
-
-SELECT customer
-	SUM(CASE product WHEN 'A' THEN amount ELSE 0) as product.A,
-	SUM(CASE product WHEN 'B' THEN amount ELSE 0) as product.B,
-	SUM(CASE product WHEN 'C' THEN amount ELSE 0) as product.C
-FROM table
-GROUP BY customer; 
-
 
 ---------------
 给我一个用户记录的表。 
@@ -870,40 +734,5 @@ GROUP BY num_comment;
 
 
 
-drop table if exists joins_test;
-create table joins_test  (id_1 int, id_2 int);
-insert into joins_test values (1,10),(1,11),(1,10),(2,10),(2,11);
-
-select * from joins_test;
--- TEST 1 => dups = 13 = 9+2
-select * from joins_test a
-inner join joins_test b
-on a.id_1 = b.id_1;
-
-select COUNT(a.id_1) from joins_test a
-right join joins_test b
-on a.id_1 = b.id_1;
-
--- TEST 2 => dups
-select * from joins_test a
-right join (select * from joins_test where id_1 = 1) b
-on a.id_1 = b.id_1;
-
--- TEST 3 => if you want to dup then don't merge dups with dups
-select * from joins_test a
-left join (select distinct(id_1) from joins_test) b
-on a.id_1 = b.id_1;
-
-
-
-
-
-
-
 country | duration(s)
-
-
-
-
-
 

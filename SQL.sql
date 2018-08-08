@@ -150,7 +150,7 @@ FROM location a
 where (SELECT count(distinct(b.rest_id)) FROM location b where a.region_id = b.region_id and b.rest_id > a.rest_id)+1 = 1 OR
       (SELECT count(distinct(b.rest_id)) FROM location b where a.region_id = b.region_id and b.rest_id < a.rest_id)+1 = 1;
 
--- 5th if no hole
+-- 5th IF NO HOLE
 SELECT * FROM location where (SELECT count(distinct(b.rest_id)) FROM location b where b.rest_id > a.rest_id)+1 = 5;
 
 
@@ -250,10 +250,10 @@ WHERE a.member_id = b.member_id
 
 R:
 
-count <- inner_join(table, table, by="member_id") %>%
-filter(year_start.x < year_start.y) %>%
-filter(company_name.x ="microsoft") %>%
-filter(compnay_name.y ="google") %>%
+count <- inner_join(table, table, by="member_id")
+filter(year_start.x < year_start.y)
+filter(company_name.x ="microsoft")
+filter(compnay_name.y ="google")
 summarise(count =n())
 print count
 
@@ -337,10 +337,10 @@ FROM table;
 
 
 ------------------- TWITCH -------------------
-DROP TABLE IF EXISTS twitch;
-CREATE TABLE twitch ( country varchar(2), duration int);
-INSERT INTO twitch VALUES ('us', 850),('us',850),('jp',3600),('us',1000);
-SELECT * FROM twitch;
+-- DROP TABLE IF EXISTS twitch;
+-- CREATE TABLE twitch ( country varchar(2), duration int);
+-- INSERT INTO twitch VALUES ('us', 850),('us',850),('jp',3600),('us',1000);
+-- SELECT * FROM twitch;
 -- Q1: AVERAGE DURIATION MINUTE FOR EACH SESSION
 SELECT AVG(duration/60)::INT FROM twitch;
 -- Q2: CHOOSE TOP 5 SESSION
@@ -601,21 +601,103 @@ Product:
 
 --------------------------------------------------- FACEBOOK ---------------------------------------------------
 
--- 1) Friending
--- a) 求acceptance rate over time
--- time | date | action {send_request, accept_request} | actor_uid | target_uid
--- 开写之前确认了一下是要same day / 1 week / 1 month acceptance rate？over time是daily / weekly / monthly
+-- 1) Content 
+-- content_actions {user_id|content_id|conent_type|target_id} content_type = {"comment", "post", "photo"} #story: post or photo
+--DROP TABLE IF EXISTS content_actions;
+--CREATE TABLE content_actions (
+--   user_id int,
+--   content_id int,
+--   content_type char(20),
+--   target_id int);
+--insert into content_actions VALUES (1,5,'post',null),
+--                                   (17,6,'photo',null),
+--                                   (16,20,'comment',5),
+--                                   (2,10,'post',null);
+-- a) 求问distribution of the comments
 
 
 
--- b) follow up问了如果发现rate上星期降了会是什么原因 
-我的回答是首先排除数据出问题，是不是data loading issue
-然后是不是有seasonality影响，可以看看year over year是不是也是这个trend，是不是有holiday啊event啊什么的。
-排除这些个因素以后，因为是rate，可以分开看到底是numerator和denominator哪个变化的厉害。是send的人突然变多了，还是accept的人变少了。分析各自可能的原因。
-然后还要看各个segment来isolate问题出在哪里
+-- b) 每个content 的comment的distribution
+
+
+
+-- c) 每个content type 的content 的comment的distribution
+
+select n_comments, count(content_id) as n_posts from
+(select a1.content_id, count(a2.content_id) as n_comments from content_action as a1
+left join content action as a2 on a.content_id = a2.target_id and a2.target_id is not null
+where a1.content_type = "post"
+group by a1.content_id) as s
+group by s.n_comments
+
+
+2） 每个content type 的content 的comment的distribution
+
+Q1: Generate a distribution for the #comments per story ( what is the distribution of comments?) !!!!!! DISTRIBUTION
+SELECT a.content_id, CASE WHEN tot_comment IS NULL THEN 0 ELSE tot_comment END AS tot_com
+FROM content_actions a
+LEFT JOIN (
+   SELECT target_id, COUNT(*) as tot_comment
+   FROM content_actions b
+   WHERE content_type = 'comment'
+   GROUP BY target_id) c
+ON c.target_id = a.content_id
+WHERE a.content_type in ('post','photo');
+
+SELECT tot_com, count(distinct(content_id)) as tot_post
+FROM (
+SELECT a.content_id, CASE WHEN tot_comment IS NULL THEN 0 ELSE tot_comment END AS tot_com
+FROM content_actions a
+LEFT JOIN (
+   SELECT target_id, COUNT(*) as tot_comment
+   FROM content_actions b
+   WHERE content_type = 'comment'
+   GROUP BY target_id) c
+ON c.target_id = a.content_id
+WHERE a.content_type in ('post','photo')) AS final
+GROUP BY tot_com
+ORDER BY tot_com;
+
+Q2: Does this account for stories with 0 comments?
+yes
+
+Q1: What is the total number of comments and total number of posts?
+   SELECT content_type, COUNT(*)
+   FROM content_actions
+   WHERE content_type <> 'photo'
+   GROUP BY content_type;
 
 Product:
-在newfeed里加“friend you may know”这个feature好不好。用哪些metrics？
+How to get the nick name of each facebook user suach david - dave , and if we already have the data how can we use it?
+
+table: 
+content_actions 
+{user_id|content_id|content_type|target_id} 
+content_type = {"comment", "post"}
+
+drop table if exists content_actions;
+create table content_actions(
+user_id int,
+  content_id int,
+  content_type varchar(20),
+  target_id int 
+);
+
+insert into content_actions Values(1,1,'Post',null);
+insert into content_actions Values(1,2,'Comment',1);
+insert into content_actions Values(2,3,'Comment',1);
+insert into content_actions Values(3,4,'Comment',1);
+insert into content_actions Values(4,5,'Post',null);
+insert into content_actions Values(5,6,'Comment',5);
+insert into content_actions Values(6,7,'Comment',5);
+insert into content_actions Values(7,8,'Post',null);
+
+1. What is the total number of comments and total number of posts?
+SELECT content_type, COUNT(*) FROM content_actions GROUP BY content_type;
+
+2. what is the distribution of comments? 
+如果content-type是post 那么便没有target-id. 然后comment的distribution就是说，比如这个post A 有6个comment，post B有六个comment，那么comment为6的post就有两个。
+output应该是两列column{num_comment| num_post} 我们要算出每个数量的comment有几个这样的post，也就是说有多少个post有一样多数量的comment。
 
 
 -- 2) 有个什么留言功能，有start-cancel和start post两种流程，用一个status variable记录状态（start，cancel，post三选一），还有什么user_id, session_id，date等等
@@ -652,12 +734,58 @@ Product:
 
 
 
+-- 3) friending
+date         action   send_id  receiver_id 
+2018-01-01   request  1        2
+2018-01-02   accept   2        1
 
+--DROP TABLE IF EXISTS FB_friending;
+--CREATE TABLE FB_friending (action_date date, action text, send_id int, receiver_id int);
+--INSERT INTO FB_friending VALUES ('2018-01-01','request',1,2),('2018-01-02','accept',2,1),
+--                                ('2018-01-01','request',3,4),('2018-01-02','reject',4,3);
+
+-- a) 就是问某一天send出去的request的acceptance rate
+SELECT COALESCE(COUNT(b.action_date)::float/COUNT(a.action_date),0) as acceptance_rate
+FROM FB_friending a
+LEFT JOIN FB_friending b
+ON a.send_id = b.receiver_id AND b.receiver_id = a.send_id AND b.action = 'accept' -- LIMITED B ACCEPT
+WHERE a.action_date = '2018-01-01' AND a.action ='request';
+-- OR
+SELECT COALESCE(SUM(CASE WHEN b.action = 'accept' THEN 1 ELSE 0 END)::float/COUNT(a.action_date),0) as acceptance_rate
+FROM FB_friending a
+LEFT JOIN FB_friending b
+ON a.send_id = b.receiver_id AND b.receiver_id = a.send_id
+WHERE a.action_date = '2018-01-01' AND a.action ='request';
+
+-- b) 求谁的朋友最多
+SELECT C.fb_user
+FROM 
+(
+SELECT send_id as fb_user, action FROM FB_friending 
+UNION ALL 
+SELECT receiver_id as fb_user, action FROM FB_friending
+) C
+WHERE C.action = 'accept'
+GROUP BY C.fb_user
+ORDER BY COUNT(*) DESC
+LIMIT 1;
+
+Product:
+就是问Acceptance rate降了咋办。月末比月初低。这个应该答的问题不大。
+
+我的回答是首先排除数据出问题，是不是data loading issue
+然后是不是有seasonality影响，可以看看year over year是不是也是这个trend，是不是有holiday啊event啊什么的。
+排除这些个因素以后，因为是rate，可以分开看到底是numerator和denominator哪个变化的厉害。是send的人突然变多了，还是accept的人变少了。分析各自可能的原因。
+然后还要看各个segment来isolate问题出在哪里
+
+如果你新开发的feature，实现了20%的CTR，你如何评价这个feature是好的，也就是说你怎么评价这个20%是好还是坏？
+在newfeed里加“friend you may know”这个feature好不好。用哪些metrics？
 
 --------------------------------------------------- LEETCODE ---------------------------------------------------
 -- CASE WHEN:
 
 UPDATE salary SET sex = (CASE WHEN sex = 'f' THEN 'm' WHEN sex = 'm' THEN 'f' ELSE '' END);
+UPDATE salary SET sex = CASE sex WHEN 'm' THEN 'f' ELSE 'm' END;
 
 SELECT CASE WHEN mod(id,2) = 0 THEN id-1 WHEN mod(id,2)=1 AND id <> (SELECT MAX(id) FROM seat) THEN id+1 ELSE id END AS new_id, student
 FROM seat
@@ -687,6 +815,8 @@ FROM courses
 GROUP BY class
 HAVING COUNT(DISTINCT(student)) >= 5;
 
+
+-- EMPTY THEN NULL
 
 
 

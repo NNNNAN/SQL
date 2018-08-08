@@ -417,6 +417,25 @@ where a.rank < 4
 
 
 
-In MySQL, you can't modify the same table which you use in the SELECT part.
-WINDOW FUNCTION XXX WHERE
-Pandas, Numpy，Matplotlib, SciKit-Learn
+SELECT America, Asia, Europe FROM  
+(SELECT ROW_NUMBER() OVER(ORDER BY name) as _order_, name as America FROM continent WHERE continent='America') America
+LEFT JOIN 
+(SELECT ROW_NUMBER() OVER(ORDER BY name) as _order_, name as Asia FROM continent WHERE continent='Asia') Asia
+ON Asia._order_ = America._order_
+LEFT JOIN 
+(SELECT ROW_NUMBER() OVER(ORDER BY name) as _order_, name as Europe FROM continent WHERE continent='Europe') Europe
+ON Europe._order_ = America._order_;
+
+
+
+
+WITH agg_table AS (SELECT )
+SELECT EXTRACT(year from pay_date)||'-'||EXTRACT(month from pay_date) AS new_pay_date, b.department_id, 
+       CASE WHEN avg(amount) < (SELECT avg(amount) as avg_amount FROM LT_615_1) THEN 'lower' 
+            WHEN avg(amount) > (SELECT avg(amount) as avg_amount FROM LT_615_1) THEN 'higher' 
+            ELSE 'same' END AS comparision
+FROM LT_615_1 a
+INNER JOIN LT_615_2 b
+ON a.employee_id = b.employee_id
+GROUP BY b.department_id, EXTRACT(year from pay_date), EXTRACT(month from pay_date);
+

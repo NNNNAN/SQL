@@ -337,3 +337,360 @@ FROM table;
 
 
 ------------------- TWITCH -------------------
+DROP TABLE IF EXISTS twitch;
+CREATE TABLE twitch ( country varchar(2), duration int);
+INSERT INTO twitch VALUES ('us', 850),('us',850),('jp',3600),('us',1000);
+SELECT * FROM twitch;
+-- Q1: AVERAGE DURIATION MINUTE FOR EACH SESSION
+SELECT AVG(duration/60)::INT FROM twitch;
+-- Q2: CHOOSE TOP 5 SESSION
+SELECT * FROM twitch ORDER BY duration DESC LIMIT 3; -- ONLY ONE
+SELECT country, RANK() OVER(ORDER BY duration DESC) FROM twitch; -- INCLUDE TIE
+-- Q3: Histogram
+select floor(duration/(60*5)) as bucket_floor, count(*) as count
+from twitch
+group by 1
+order by 1;
+
+select
+    bucket_floor,
+    CONCAT(bucket_floor, ' to ', bucket_ceiling) as bucket_name,
+    count(*) as count
+from (select floor(duration/(60*5)) as bucket_floor, floor(duration/(60*5)) + 1 as bucket_ceiling from twitch) a
+group by 1, 2
+order by 1;
+-- Q4
+
+-- Q5: DIFF BETWEEN 1000
+-- 'us'|'jp'
+-- 'jp'|'us'
+WITH new_table AS (SELECT country, SUM(duration) AS tot FROM twitch GROUP BY country)
+SELECT a.country, b.country
+FROM new_table a, new_table b
+WHERE ABS(a.tot-b.tot) <= 1000
+AND a.country <> b.country;
+
+WITH new_table AS (SELECT country, SUM(duration) AS tot FROM twitch GROUP BY country)
+SELECT a.country, b.country
+FROM new_table a, new_table b
+WHERE ABS(a.tot-b.tot) <= 1000
+AND a.country < b.country;
+
+
+
+
+--------------------------------------------------- OPENTABLE ---------------------------------------------------
+
+-- Q1 2nd highest
+WITH rank AS(
+select generate_series(1,10) as x)
+SELECT a.x FROM rank a WHERE (SELECT COUNT(DISTINCT(b.x)) FROM rank b WHERE b.x < a.x)+1 = 2;
+
+WITH rank AS(
+select generate_series(1,10) as x)
+SELECT a.x FROM rank a WHERE (SELECT COUNT(DISTINCT(b.x)) FROM rank b WHERE b.x > a.x)+1 = 2;
+
+-- Q2: 365 days, one device, only IOS
+
+create table opentable_sql (user_id int, device varchar(10), booking_date date);
+insert into opentable_sql VALUES (1,'IOS','2018-06-01'),(1,'IOS','2018-06-02'),
+  (2,'Android','2018-06-01'),(2,'IOS','2018-06-01'),(2,'IOS','2018-06-01');
+
+-- ERROR:  aggregate functions are not allowed in WHERE
+-- string_agg(device,',') has duplicates but no delimeter after the last varchar
+SELECT user_id, string_agg(distinct device,',')
+FROM opentable_sql
+WHERE booking_date > current_date - 365
+GROUP BY user_id
+HAVING string_agg(distinct device,',') = 'IOS';
+
+-- Q3: How to identify users that make a booking once a year for the past 5 years
+
+SELECT user_id
+FROM opentable_sql
+WHERE booking_date > current_date - 365*5
+GROUP BY user_id
+HAVING COUNT(DISTINCT(EXTRACT(YEAR FROM booking_date))) = 5;
+
+-- 2 years
+WITH AGG AS (
+  SELECT user_id, EXTRACT(YEAR FROM booking_date) as _year_
+  FROM opentable_sql
+  WHERE booking_date > current_date - 365*2
+  GROUP BY user_id, EXTRACT(YEAR FROM booking_date))
+SELECT A.user_id
+FROM AGG A1, AGG A2
+WHERE A1.user_id = A2.user_id
+  AND A1._year_ - A2._year_ = 1;
+
+-- Q4 How to create a table which lists out all the dates 
+select generate_series(1,4);
+1
+2
+3
+4
+-- 2*4 = 8
+SELECT *
+FROM opentable_sql 
+CROSS JOIN generate_series(1,4) as x
+WHERE user_id = 1;
+
+SELECT dd:: date
+FROM generate_series ('2007-02-01', '2007-02-28', '1 day'::interval) dd;
+
+-- sample data:
+  123, 1, 02/01/2017, 02/28/2017, 0
+  123, 2, 02/14/2017, 02/14/2017, 1
+
+-- Expected output:
+  123, 1, 02/01/2017, 0
+  ...
+  123, 2, 02/14/2017, 1
+  ...
+  123, 1, 02/28/2017, 0
+
+create table opentable_sql_q4 (user_id int, resv_id int, date_1 date, date_2 date, flag int);
+insert into opentable_sql_q4 VALUES (123, 1, '02/01/2017', '02/28/2017', 0),
+  (123, 1, '02/01/2017', '02/28/2017', 0);
+
+select generate_series(date_1, date_2, '1 day'::interval)::date as calendar
+from opentable_sql_q4;
+
+
+
+
+--------------------------------------------------- AMAZON PREP ---------------------------------------------------
+
+-- 1) orders (order_id, customer_id, order_datetime, order_amt):
+-- a)select top 10 paying customers for given month  
+SELECT customer_id, sum(order_amt) as tot
+FROM orders 
+WHERE EXTRACT(YEAR FROM order_datetime) = 2018 AND EXTRACT(MONTH FROM order_datetime) = 7 ----? LAST MONTH? 
+GROUP BY customer_id
+ORDER BY sum(order_amt) DESC
+LIMIT 10;
+
+-- b) create daily revenue report between given start_date and end_date
+  -- output schema: (order_date, number_of_customers, number_of_orders, daily_total_order_amount, mtd_order_amount)
+  -- mtd_order_amount - total order_amt from the beginning of the month till order_date 
+
+--DROP TABLE IF EXISTS amazon_orders;
+--create table amazon_orders (order_id int, customer_id int, order_datetime date, order_amt int);
+--INSERT INTO amazon_orders VALUES (1,1,'2018-04-01',5),(2,1,'2018-04-02',5),(3,1,'2018-04-02',5),(3,3,'2018-05-01',5),(4,4,'2018-05-02',10);
+SELECT a.order_datetime, COUNT(DISTINCT(a.customer_id)) as number_of_customers, 
+  COUNT(DISTINCT(a.order_id)) as number_of_orders,
+  SUM(a.order_amt) as daily_total_order_amount,
+  (SELECT SUM(b.order_amt) FROM amazon_orders b 
+   WHERE EXTRACT(YEAR FROM a.order_datetime) = EXTRACT(YEAR FROM b.order_datetime)
+     AND EXTRACT(MONTH FROM a.order_datetime) = EXTRACT(MONTH FROM b.order_datetime)
+     AND b.order_datetime <= a.order_datetime) as mtd_order_amount
+FROM amazon_orders a
+GROUP BY a.order_datetime;
+
+-- 2) You have a website and you need to report the traffic insights on this website to the Product Manager. 
+-- Write a SQL query to find the top 10 persons who have visited the website in the last month
+
+select customer_id,count(*) 
+from table 
+where eff_dt between current_date and current_date-30 
+group by customer_id 
+order by count(*) desc 
+fetch first 10 rows only;
+
+
+-- 3) Select all customers who purchased at least two items on two separate days. 
+
+SELECT customers 
+FROM (
+  SELECT customers, date
+  FROM table
+  GROUP BY customers, date
+  HAVING COUNT(DISTINCT(item)) >=2 ) A
+GROUP BY customers
+HAVING COUNT(DISTINCT(date)) = 2;
+
+-- 4) Given a table with a combination of flight paths, how would you identify unique flights if you don't care which city is the destination or arrival location.
+
+--DROP TABLE IF EXISTS amazon_flight;
+--CREATE TABLE amazon_flight (departure text, arrival text);
+--INSERT INTO amazon_flight VALUES ('A','B'),('A','B'),
+--                         ('B','A'),
+--                         ('C','D'),
+--                         ('C','A');
+--  SELECT DISTINCT departure, arrival FROM amazon_flight; BOTH DISTINCT
+SELECT DISTINCT a.arrival, a.departure
+FROM amazon_flight a
+LEFT JOIN amazon_flight b
+ON a.departure = b.arrival AND a.arrival = b.departure
+-- UNIQUE
+WHERE b.arrival IS NULL 
+-- DUPLICATES
+   OR a.departure < a.arrival ;
+
+-- 5) order history+ 每个customer在各个产品品类下面place过的首个和最后一个order的记录，
+CREATE TABLE amazon_order_history (customer int, product int, order_date date);
+INSERT INTO amazon_order_history (1,1,'2018-08-01'),(1,1,'2018-08-05'),(1,1,'2018-08-06'),
+                       (2,1,'2018-08-01'),(2,1,'2018-08-05'),(2,1,'2018-08-06'),
+                       (3,1,'2018-08-01'),(3,1,'2018-08-05'),(3,2,'2018-08-06');
+
+SELECT a.*
+FROM amazon_order_history a
+WHERE (SELECT COUNT(*) FROM amazon_order_history b 
+     WHERE a.customer = b.customer AND a.product = b.product AND b.order_date > a.order_date)+ 1 = 1
+  OR (SELECT COUNT(*) FROM amazon_order_history b 
+     WHERE a.customer = b.customer AND a.product = b.product AND b.order_date < a.order_date)+ 1 = 1;
+
+-- 1).每天各产品类下的order中，是某顾客在该品类首个order的比例????????
+
+
+-- 2).每天所有order中，是某顾客首个order的比例
+
+
+
+Product:
+在在线广告行业，分析问题时会考虑哪些metrics；还有如果已知CTR=5%，怎么判断这个CTR是好是坏
+
+
+
+previous project:
+Tell us about your work experience that is relevant to the position you applied.
+Tell us about the skills you have acquired that are relevant to the position you applied.
+
+BQ:
+Tell me a time when you used the wrong dataset to do data analysis.  
+How do you motivate people?  
+A time where you had a team conflict  
+Why are you applying for this job?
+
+Other Tech:
+R: Data loading from a text file , sub setting , and transforming
+BI, Dimensional Modelling, Statistics
+Very basic Python coding
+confidence intervals...(they work in NLP ,so term counts are important)
+30 min about statistics
+Describe a join to a non-technical person.
+Data warehousing concepts, ETL fundamentals  
+How is variance calculated in a PCA
+Stats questions : what is ttest, forecasting and  optimization techniques.
+R: visualization, data frames, matrices. 
+Math: Probability and forecasting examples.  
+
+
+--------------------------------------------------- GOOGLE Product Analyst ---------------------------------------------------
+
+-- 就是求一个group里面最近日期对应的行，用partition by就可以解决了 ---------------?
+
+SELECT ROW_NUMBER() OVER(PARTITION BY USER ORDER BY date )
+FROM table;
+
+-- 从一个group里面random选十行出来
+
+SELECT * 
+FROM (
+  SELECT *, row_number() OVER (PARTITION BY category ORDER BY random()) as rn
+  FROM table ) sub
+WHERE rn < 11;
+
+-- 1 line
+SELECT DISTINCT ON (category) *
+FROM table 
+ORDER BY category, random();
+
+Product:
+怎么样决定google express该用多少promotion？promotion该持续多长时间？怎样evaluate这个promotion有没有效？
+
+--------------------------------------------------- FACEBOOK ---------------------------------------------------
+
+-- 1) Friending
+-- a) 求acceptance rate over time
+-- time | date | action {send_request, accept_request} | actor_uid | target_uid
+-- 开写之前确认了一下是要same day / 1 week / 1 month acceptance rate？over time是daily / weekly / monthly
+
+
+
+-- b) follow up问了如果发现rate上星期降了会是什么原因 
+我的回答是首先排除数据出问题，是不是data loading issue
+然后是不是有seasonality影响，可以看看year over year是不是也是这个trend，是不是有holiday啊event啊什么的。
+排除这些个因素以后，因为是rate，可以分开看到底是numerator和denominator哪个变化的厉害。是send的人突然变多了，还是accept的人变少了。分析各自可能的原因。
+然后还要看各个segment来isolate问题出在哪里
+
+Product:
+在newfeed里加“friend you may know”这个feature好不好。用哪些metrics？
+
+
+-- 2) 有个什么留言功能，有start-cancel和start post两种流程，用一个status variable记录状态（start，cancel，post三选一），还有什么user_id, session_id，date等等
+-- 每一个动作对应一个状态，user_id是唯一的，状态可以有很多种
+-- a) 要你算每一天的ave post rate/user
+SELECT date, SUM(CASE WHEN status = 'POST' THEN 1 ELSE 0 END)/SUM(CASE WHEN status ='START' THEN 1 ELSE 0 END)
+FROM TABLE 
+GROUP BY date;
+-- last week
+SELECT SUM(CASE WHEN status = 'POST' THEN 1 ELSE 0 END)/SUM(CASE WHEN status ='START' THEN 1 ELSE 0 END)
+FROM TABLE 
+WHERE date between ;
+
+-- b) 然后给了第二个table，是user的具体信息，什么location啥的，还有一个是否active，一共就是user_id,date,active(1/0),location
+-- 要你算有多少user用了这个function并且成功post per location per date
+SELECT location, date, COUNT(DISTINCT(user_id))
+FROM TABLE
+INNER JOIN user
+ON TABLE.user_id = user.user_id
+WHERE status = 'POST'
+GROUP BY location, date;
+
+-- c)然后加一个filter要求是当天active的人
+
+
+Product:
+说以前都是打字留言，现在想搞一个视频留言功能，你觉得怎么样
+我：吹了一下，优点。。。，缺点。。。
+追加：如果要你测试新功能，你怎么测试
+追加：详细说说ab test
+追加：有其他的办法吗
+追加：更详细说说你的这个办法怎么做
+最后：如果ab test结果很好，你觉得这个功能可以上架了吗
+
+
+
+
+
+--------------------------------------------------- LEETCODE ---------------------------------------------------
+-- CASE WHEN:
+
+UPDATE salary SET sex = (CASE WHEN sex = 'f' THEN 'm' WHEN sex = 'm' THEN 'f' ELSE '' END);
+
+SELECT CASE WHEN mod(id,2) = 0 THEN id-1 WHEN mod(id,2)=1 AND id <> (SELECT MAX(id) FROM seat) THEN id+1 ELSE id END AS new_id, student
+FROM seat
+ORDER BY new_id;
+
+-- SELF JOIN:
+
+  -- A. Consecutive
+  -- select * from amazon_flight a, amazon_flight b; THIS SELF JOIN => CROSS JOIN
+
+SELECT DISTINCT a.*
+FROM stadium a, stadium b, stadium c
+WHERE a.people >= 100 AND b.people >= 100 AND c.people >= 100
+-- a in the beginning
+AND ((a.id = b.id + 1 AND b.id = c.id + 1)
+-- a in the middle
+  OR (b.id = a.id + 1 AND a.id = c.id + 1)
+-- a at the end
+  OR (b.id = c.id + 1 AND c.id = a.id + 1))
+ORDER BY a.id;
+
+
+-- HAVING:
+-- ERROR:  aggregate functions are not allowed in WHERE
+SELECT class
+FROM courses
+GROUP BY class
+HAVING COUNT(DISTINCT(student)) >= 5;
+
+
+
+
+
+
+
+

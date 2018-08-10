@@ -323,24 +323,7 @@ WHERE event IN (
 	FROM table
 	GROUP BY eventID
 	HAVING COUNT(distinct(studentID)) > 50);
-----------------------------------------------------------------------
-purchase table
-里面有id，purchase_date，price
-Q1: year-to-date 的revenue 按purchase_date 划分
-SELECT EXTRACT(YEAR FROM purchase_date), SUM(price)
-FROM table
-GROUP BY EXTRACT(YEAR FROM purchase_date);
 
-flight的table，有depature city和 arrival city，求unique的不论顺序的 组合
-
-比如 depature, arrival.
-        A             B. 
-        B             A
-结果只出现 A B。
-
-
-WITH NEW AS (SELECT depature, arrival FROM TABLE GROUP BY depature, arrival)
-SELECT 
 
 
 ----------------------------------------------------------------------
@@ -492,10 +475,6 @@ FROM id_2 a, id_2 b
 WHERE a.name = b.name
 AND a.id <> b.id;
 
-这个用到out join
-
-
-
 
 /*************** LINKEDIN 1 **************/ 
 table1: campaigns
@@ -561,7 +540,7 @@ R code:
 library(dplyr)
 
 data_selected <- data[which (data$author_id == data$viewer_id),]
-author_id_to_delete <- unique(data_selected$author_id). 1point3acres.com/bbs
+author_id_to_delete <- unique(data_selected$author_id)
 result <- data$author_id[which (data$author_id not in author_id_to_delete),]
 print result
 

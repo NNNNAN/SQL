@@ -151,7 +151,7 @@ where (SELECT count(distinct(b.rest_id)) FROM location b where a.region_id = b.r
       (SELECT count(distinct(b.rest_id)) FROM location b where a.region_id = b.region_id and b.rest_id < a.rest_id)+1 = 1;
 
 -- 5th IF NO HOLE
-SELECT * FROM location where (SELECT count(distinct(b.rest_id)) FROM location b where b.rest_id > a.rest_id)+1 = 5;
+SELECT a.* FROM location a where (SELECT count(distinct(b.rest_id)) FROM location b where b.rest_id > a.rest_id)+1 = 5;
 
 
 
@@ -165,7 +165,6 @@ coalesce(max(date_updated),'1990-01-01')
 string_agg(zip, ', ')
 -- SELECT group_id, string_agg(user_id::TEXT, ',') FROM test_case_for_rank GROUP BY group_id;
 SELECT DATE_PART('year', '2012-01-01'::date),EXTRACT(year FROM CURRENT_DATE);
-
 
 
 
@@ -487,15 +486,29 @@ SELECT a.order_datetime, COUNT(DISTINCT(a.customer_id)) as number_of_customers,
 FROM amazon_orders a
 GROUP BY a.order_datetime;
 
+
+SELECT A.*, SUM(A.daily_total_order_amount) OVER(PARTITION BY EXTRACT(YEAR FROM A.order_datetime), EXTRACT(MONTH FROM A.order_datetime) ORDER BY A.order_datetime) as mtd_order_amount
+FROM ( 
+SELECT order_datetime, COUNT(DISTINCT(customer_id)) as number_of_customers, 
+       COUNT(DISTINCT(order_id)) as number_of_orders, 
+       SUM(order_amt) as daily_total_order_amount
+FROM amazon_orders
+GROUP BY order_datetime) A;
+
+
+
+
 -- 2) You have a website and you need to report the traffic insights on this website to the Product Manager. 
 -- Write a SQL query to find the top 10 persons who have visited the website in the last month
 
 select customer_id,count(*) 
 from table 
-where eff_dt between current_date and current_date-30 
+where eff_dt between select date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'; and select date_trunc('month', CURRENT_DATE) - INTERVAL '1 day'; 
 group by customer_id 
 order by count(*) desc 
-fetch first 10 rows only;
+LIMIT 10;
+
+
 
 
 -- 3) Select all customers who purchased at least two items on two separate days. 
@@ -509,6 +522,8 @@ FROM (
 GROUP BY customers
 HAVING COUNT(DISTINCT(date)) = 2;
 
+
+
 -- 4) Given a table with a combination of flight paths, how would you identify unique flights if you don't care which city is the destination or arrival location.
 
 --DROP TABLE IF EXISTS amazon_flight;
@@ -516,16 +531,22 @@ HAVING COUNT(DISTINCT(date)) = 2;
 --INSERT INTO amazon_flight VALUES ('A','B'),('A','B'),
 --                         ('B','A'),
 --                         ('C','D'),
---                         ('C','A');
+--                         ('C','A'),
+--                         ('D','A');
 --  SELECT DISTINCT departure, arrival FROM amazon_flight; BOTH DISTINCT
-SELECT DISTINCT a.arrival, a.departure
+
+SELECT DISTINCT a.departure, a.arrival
 FROM amazon_flight a
 LEFT JOIN amazon_flight b
-ON a.departure = b.arrival AND a.arrival = b.departure
+ON a.departure = b.arrival
+  AND a.arrival   = b.departure
 -- UNIQUE
-WHERE b.arrival IS NULL 
+WHERE b.departure IS NULL 
 -- DUPLICATES
-   OR a.departure < a.arrival ;
+   OR (b.departure IS NOT NULL AND a.departure < a.arrival);
+
+
+
 
 -- 5) order history+ 每个customer在各个产品品类下面place过的首个和最后一个order的记录，
 CREATE TABLE amazon_order_history (customer int, product int, order_date date);
@@ -540,10 +561,64 @@ WHERE (SELECT COUNT(*) FROM amazon_order_history b
   OR (SELECT COUNT(*) FROM amazon_order_history b 
      WHERE a.customer = b.customer AND a.product = b.product AND b.order_date < a.order_date)+ 1 = 1;
 
--- 1).每天各产品类下的order中，是某顾客在该品类首个order的比例????????
+-- a).每天各产品类下的order中，是某顾客在该品类首个order的比例????????
 
 
--- 2).每天所有order中，是某顾客首个order的比例
+-- b).每天所有order中，是某顾客首个order的比例
+
+
+
+-- 6) 给一个purchase的table，里面有id，purchase_date，price, 求year-to-date 的revenue 按purchase_date 划分 (running sum)
+--DROP TABLE IF EXISTS amazon_purchase;
+--CREATE TABLE amazon_purchase (id int, purchase_date date, price int);
+--INSERT INTO amazon_purchase VALUES (1,'2018-01-01',10),(2,'2018-01-01',10),(3,'2018-01-07',10),(4,'2017-01-01',10);
+
+SELECT id, purchase_date, SUM(price) OVER(PARTITION BY EXTRACT(YEAR FROM purchase_date) ORDER BY purchase_date) as running_sum
+FROM amazon_purchase;
+
+
+
+-- 7）Use the first three columns of the table to recreate the table (four columns: Pkgs yesterday)
+--DROP TABLE IF EXISTS amazon_gateway;
+--CREATE TABLE amazon_gateway (gateway varchar(1), "date" date, pkgs int);
+--INSERT INTO amazon_gateway VALUES ('A','2017-12-21',20),
+--                                  ('C','2017-12-20',20),
+--                                  ('A','2017-12-20',10),
+--                                  ('B','2017-12-20',20),
+--                                  ('B','2017-12-22',30),
+--                                  ('B','2017-12-21',25),
+--                                  ('C','2017-12-19',5);
+
+SELECT a.*, b.pkgs as pkgs_yesterday
+FROM amazon_gateway a
+LEFT JOIN amazon_gateway b
+ON a.gateway = b.gateway AND date_part('day',age(a.date, b.date)) = 1;
+
+
+
+-- 8) Use the first table to pivot to the second table
+--DROP TABLE IF EXISTS amazon_carrier;
+--CREATE TABLE amazon_carrier (carrier varchar(1), "date" date, pkg int);
+--INSERT INTO amazon_carrier VALUES ('U','2017-12-21',10),
+--                                  ('A','2017-12-22',15),
+--                                  ('D','2017-12-21',5),
+--                                  ('A','2017-12-22',20),
+--                                  ('U','2017-12-23',10),
+--                                  ('A','2017-12-20',8),
+--                                  ('D','2017-12-21',15);
+
+DATE          U    A    D 
+2017-12-21     10  NA  20
+....
+
+SELECT COALESCE(U."date",A."date",D."date"), U.pkg, A.pkg, D.pkg
+FROM (SELECT "date", pkg FROM amazon_carrier WHERE carrier = 'U') U
+FULL JOIN (SELECT "date", pkg FROM amazon_carrier WHERE carrier = 'A') A
+ON U."date" = A."date"
+FULL JOIN (SELECT "date", pkg FROM amazon_carrier WHERE carrier = 'D') D
+ON U."date" = D."date";
+
+
 
 
 

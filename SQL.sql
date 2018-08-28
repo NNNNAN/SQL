@@ -54,24 +54,25 @@ ORDER BY deptno DESC;
 
 
 ------------------JOIN --------------
-INNER JOIN
+
+INNER JOIN -- missing join on var bu join
 
 RIGHT JOIN
 LEFT JOIN
 FULL JOIN
 
-CROSS JOIN
-SELF JOIN
+CROSS JOIN --A(6) B(6) => 6*6 = 36 -- no on
 
---drop table if exists joins_test;
---create table joins_test  (id_1 int, id_2 int);
---insert into joins_test values (1,10),(1,11),(1,10),(2,10),(2,11);
---select * from joins_test;
+-- drop table if exists joins_test;
+-- create table joins_test  (id_1 int, id_2 int);
+-- insert into joins_test values (1,10),(1,11),(1,10),(2,10),(2,11),(null,10);
+-- select * from joins_test;
 
--- TEST 0 => 25 = 5*5
+-- TEST 0 => 36 = 6*6
 --select * from joins_test a, joins_test b;
+--select * from joins_test a cross join joins_test b;
 
--- TEST 1 => dups = 13 = 3*3+2*2
+-- TEST 1 => dups = 13 = 3*3+2*2 (no missing)
 -- select * from joins_test a
 -- inner join joins_test b
 -- on a.id_1 = b.id_1;
@@ -91,7 +92,7 @@ SELF JOIN
 -- the rows retain their separate identities.
 ROW_NUMBER() -- NO HOLE AND NO TIE
 RANK()       -- HOLE AND TIE [F]
-AVG(xxx)
+AVG(xxx),MIN(xxx),MAX(xxx)
 SUM(xxx)
 
 --DROP TABLE IF EXISTS test_case_for_rank;
@@ -102,7 +103,7 @@ SUM(xxx)
 SELECT *, ROW_NUMBER() OVER (ORDER BY score DESC) as row_num FROM test_case_for_rank;
 SELECT *, ROW_NUMBER() OVER (ORDER BY group_id, score DESC) as row_num FROM test_case_for_rank;
 
--- RANK
+-- RANK -- RANK MUST HAVE ORDER
 SELECT *, RANK() OVER (ORDER BY score DESC) as all_rank FROM test_case_for_rank;
 
 -- AVG
@@ -163,9 +164,10 @@ substring(phone_home::text from 1 for 3)::int
 -- The COALESCE function returns the first of its arguments that is not null
 coalesce(max(date_updated),'1990-01-01')
 string_agg(zip, ', ')
+string_agg(distinct device,',')
 -- SELECT group_id, string_agg(user_id::TEXT, ',') FROM test_case_for_rank GROUP BY group_id;
 SELECT DATE_PART('year', '2012-01-01'::date),EXTRACT(year FROM CURRENT_DATE);
-
+LEAST() GREATEST()
 
 
 
@@ -198,14 +200,14 @@ inner join a
 on a.region_id = region.region_id;
 
 WITH regional_sales AS (
-        SELECT region, SUM(amount) AS total_sales
-        FROM orders
-        GROUP BY region
+                       SELECT region, SUM(amount) AS total_sales
+                       FROM orders
+                       GROUP BY region
      ), 
 	  top_regions AS (
-        SELECT region
-        FROM regional_sales
-        WHERE total_sales > (SELECT SUM(total_sales)/10 FROM regional_sales)
+                       SELECT region
+                       FROM regional_sales
+                       WHERE total_sales > (SELECT SUM(total_sales)/10 FROM regional_sales)
      )
 SELECT region,
        product,
@@ -277,19 +279,12 @@ WHERE a.member_id = b.member_id
 --如何输出table,每行 customer, product.A, poduct.B, product.C
 --                    1        x1          x2          x3
 
-SELECT customer
-   SUM(CASE product WHEN 'A' THEN amount ELSE 0) as product.A,
-   SUM(CASE product WHEN 'B' THEN amount ELSE 0) as product.B,
-   SUM(CASE product WHEN 'C' THEN amount ELSE 0) as product.C
+SELECT customer,
+   SUM(CASE product WHEN 'A' THEN amount ELSE 0 END) as product_A,
+   SUM(CASE product WHEN 'B' THEN amount ELSE 0 END) as product_B,
+   SUM(CASE product WHEN 'C' THEN amount ELSE 0 END) as product_C
 FROM LINKEDIN_PRODUCT
 GROUP BY customer;
-
-
-
-
-
-
-
 
 
 
@@ -320,19 +315,23 @@ WHERE s.product_id in ('A','B');
 
 SELECT * 
 FROM sort_test
-ORDER BY CASE WHEN index in ('S','s') THEN 0 ELSE 1, index;
+ORDER BY CASE WHEN index in ('S','s') THEN 0 ELSE 1 END, index;
+
+SELECT * 
+FROM sort_test
+ORDER BY (CASE WHEN index in ('s','S') then 1 else 0 end) DESC, index;
 
 ------------------------------------------------------------------
 -- 一道返回每个学生的最高分，重复按course id
-SELECT student, course_id, MAX(score)
-FROM table 
-GROUP BY student, course_id;
+SELECT * 
+FROM (
+   SELECT student, score, ROW_NUMBER() OVER(PARTITION BY student ORDER BY score DESC, course_id) as _rank_
+   FROM table) A
+WHERE a._rank_ = 1;
+
 -- 另一道算running total
 SELECT student, SUM(score) OVER(PARTITION BY student ORDER BY course_id) as running_total
 FROM table;
-
-
-
 
 
 ------------------- TWITCH -------------------
@@ -381,19 +380,20 @@ AND a.country < b.country;
 --------------------------------------------------- OPENTABLE ---------------------------------------------------
 
 -- Q1 2nd highest
-WITH rank AS(
-select generate_series(1,10) as x)
-SELECT a.x FROM rank a WHERE (SELECT COUNT(DISTINCT(b.x)) FROM rank b WHERE b.x < a.x)+1 = 2;
+WITH rank AS (select generate_series(1,10) as x)
+SELECT a.x 
+FROM rank a 
+WHERE (SELECT COUNT(DISTINCT(b.x)) FROM rank b WHERE b.x < a.x)+1 = 2;
 
-WITH rank AS(
-select generate_series(1,10) as x)
-SELECT a.x FROM rank a WHERE (SELECT COUNT(DISTINCT(b.x)) FROM rank b WHERE b.x > a.x)+1 = 2;
+WITH rank AS(select generate_series(1,10) as x)
+SELECT a.x 
+FROM rank a 
+WHERE (SELECT COUNT(DISTINCT(b.x)) FROM rank b WHERE b.x > a.x)+1 = 2;
 
 -- Q2: 365 days, one device, only IOS
 
-create table opentable_sql (user_id int, device varchar(10), booking_date date);
-insert into opentable_sql VALUES (1,'IOS','2018-06-01'),(1,'IOS','2018-06-02'),
-  (2,'Android','2018-06-01'),(2,'IOS','2018-06-01'),(2,'IOS','2018-06-01');
+--create table opentable_sql (user_id int, device varchar(10), booking_date date);
+--insert into opentable_sql VALUES (1,'IOS','2018-06-01'),(1,'IOS','2018-06-02'),(2,'Android','2018-06-01'),(2,'IOS','2018-06-01'),(2,'IOS','2018-06-01');
 
 -- ERROR:  aggregate functions are not allowed in WHERE
 -- string_agg(device,',') has duplicates but no delimeter after the last varchar
@@ -402,6 +402,12 @@ FROM opentable_sql
 WHERE booking_date > current_date - 365
 GROUP BY user_id
 HAVING string_agg(distinct device,',') = 'IOS';
+
+SELECT user_id
+FROM opentable_sql
+WHERE booking_date > current_date - 365
+GROUP BY user_id
+HAVING count(user_id) = SUM(CASE WHEN device = 'IOS' THEN 1 ELSE 0 END) 
 
 -- Q3: How to identify users that make a booking once a year for the past 5 years
 
@@ -434,8 +440,9 @@ FROM opentable_sql
 CROSS JOIN generate_series(1,4) as x
 WHERE user_id = 1;
 
-SELECT dd:: date
-FROM generate_series ('2007-02-01', '2007-02-28', '1 day'::interval) dd;
+SELECT dd:: date FROM generate_series ('2007-02-01', '2007-02-28', '1 day'::interval);
+
+SELECT generate_series ('2018-02-01', '2018-02-028', '1 day'::interval)::date dd;
 
 -- sample data:
   123, 1, 02/01/2017, 02/28/2017, 0
@@ -448,26 +455,40 @@ FROM generate_series ('2007-02-01', '2007-02-28', '1 day'::interval) dd;
   ...
   123, 1, 02/28/2017, 0
 
-create table opentable_sql_q4 (user_id int, resv_id int, date_1 date, date_2 date, flag int);
-insert into opentable_sql_q4 VALUES (123, 1, '02/01/2017', '02/28/2017', 0),
-  (123, 1, '02/01/2017', '02/28/2017', 0);
+-- drop table if exists opentable_sql_q4;
+-- create table opentable_sql_q4 (user_id int, resv_id int, date_1 date, date_2 date, flag int);
+-- insert into opentable_sql_q4 VALUES (123, 1, '02/01/2017', '02/28/2017', 0),(123, 1, '02/14/2017', '02/14/2017', 1);
 
-select generate_series(date_1, date_2, '1 day'::interval)::date as calendar
-from opentable_sql_q4;
-
+select user_id, resv_id, new_date::date, MAX(flag) as new_flag
+from (
+select *, generate_series(date_1::date,date_2::date, '1 day'::interval) as new_date
+from opentable_sql_q4) a
+group by user_id, resv_id, new_date;
 
 
 
 --------------------------------------------------- AMAZON PREP ---------------------------------------------------
 
--- 1) orders (order_id, customer_id, order_datetime, order_amt):
+-- 1) am_order (order_id, customer_id, order_datetime, order_amt):
 -- a)select top 10 paying customers for given month  
+
+--DROP TABLE IF EXISTS am_order;
+--CREATE TABLE am_order (order_id int, customer_id int, order_datetime date, order_amt int);
+--INSERT INTO am_order VALUES (1,10,'2018-08-01',160),(2,10,'2018-08-02',50),(3,11,'2018-08-01',10),(4,11,'2018-08-01',100),(5,11,'2018-08-01',100);
+
+-- only 10
 SELECT customer_id, sum(order_amt) as tot
-FROM orders 
-WHERE EXTRACT(YEAR FROM order_datetime) = 2018 AND EXTRACT(MONTH FROM order_datetime) = 7 ----? LAST MONTH? 
+FROM am_order
+WHERE EXTRACT(YEAR FROM order_datetime) = 2018 AND EXTRACT(MONTH FROM order_datetime) = 8
 GROUP BY customer_id
 ORDER BY sum(order_amt) DESC
-LIMIT 10;
+LIMIT 10
+
+SELECT * FROM (
+SELECT customer_id, sum(order_amt) as tot, RANK() OVER(ORDER BY sum(order_amt) desc) as _rank_
+FROM am_order
+GROUP BY customer_id) a
+WHERE a._rank_ = 10;
 
 -- b) create daily revenue report between given start_date and end_date
   -- output schema: (order_date, number_of_customers, number_of_orders, daily_total_order_amount, mtd_order_amount)
@@ -497,34 +518,16 @@ GROUP BY order_datetime) A;
 
 
 
+-- 2) Select all customers who purchased at least two items on two separate days. 
 
--- 2) You have a website and you need to report the traffic insights on this website to the Product Manager. 
--- Write a SQL query to find the top 10 persons who have visited the website in the last month
-
-select customer_id,count(*) 
-from table 
-where eff_dt between select date_trunc('month', CURRENT_DATE) - INTERVAL '1 month'; and select date_trunc('month', CURRENT_DATE) - INTERVAL '1 day'; 
-group by customer_id 
-order by count(*) desc 
-LIMIT 10;
+SELECT distinct(customer_id)
+FROM TABLE a, TABLE b
+WHERE a.customer_id = b.customer_id
+AND a.order_date <> b.order_date
+AND a.item <> b.item;
 
 
-
-
--- 3) Select all customers who purchased at least two items on two separate days. 
-
-SELECT customers 
-FROM (
-  SELECT customers, date
-  FROM table
-  GROUP BY customers, date
-  HAVING COUNT(DISTINCT(item)) >=2 ) A
-GROUP BY customers
-HAVING COUNT(DISTINCT(date)) = 2;
-
-
-
--- 4) Given a table with a combination of flight paths, how would you identify unique flights if you don't care which city is the destination or arrival location.
+-- 3) Given a table with a combination of flight paths, how would you identify unique flights if you don't care which city is the destination or arrival location.
 
 --DROP TABLE IF EXISTS amazon_flight;
 --CREATE TABLE amazon_flight (departure text, arrival text);
@@ -548,11 +551,11 @@ WHERE b.departure IS NULL
 
 
 
--- 5) order history+ 每个customer在各个产品品类下面place过的首个和最后一个order的记录，
-CREATE TABLE amazon_order_history (customer int, product int, order_date date);
-INSERT INTO amazon_order_history (1,1,'2018-08-01'),(1,1,'2018-08-05'),(1,1,'2018-08-06'),
-                       (2,1,'2018-08-01'),(2,1,'2018-08-05'),(2,1,'2018-08-06'),
-                       (3,1,'2018-08-01'),(3,1,'2018-08-05'),(3,2,'2018-08-06');
+-- 4) order history+ 每个customer在各个产品品类下面place过的首个和最后一个order的记录，
+-- CREATE TABLE amazon_order_history (customer int, product int, order_date date);
+-- INSERT INTO amazon_order_history VAUES (1,1,'2018-08-01'),(1,1,'2018-08-05'),(1,1,'2018-08-06'),
+--                        (2,1,'2018-08-01'),(2,1,'2018-08-05'),(2,1,'2018-08-06'),
+--                        (3,1,'2018-08-01'),(3,1,'2018-08-05'),(3,2,'2018-08-06');
 
 SELECT a.*
 FROM amazon_order_history a
@@ -568,7 +571,7 @@ WHERE (SELECT COUNT(*) FROM amazon_order_history b
 
 
 
--- 6) 给一个purchase的table，里面有id，purchase_date，price, 求year-to-date 的revenue 按purchase_date 划分 (running sum)
+-- 5) 给一个purchase的table，里面有id，purchase_date，price, 求year-to-date 的revenue 按purchase_date 划分 (running sum)
 --DROP TABLE IF EXISTS amazon_purchase;
 --CREATE TABLE amazon_purchase (id int, purchase_date date, price int);
 --INSERT INTO amazon_purchase VALUES (1,'2018-01-01',10),(2,'2018-01-01',10),(3,'2018-01-07',10),(4,'2017-01-01',10);
@@ -578,7 +581,7 @@ FROM amazon_purchase;
 
 
 
--- 7）Use the first three columns of the table to recreate the table (four columns: Pkgs yesterday)
+-- 6） Use the first three columns of the table to recreate the table (four columns: Pkgs yesterday)
 --DROP TABLE IF EXISTS amazon_gateway;
 --CREATE TABLE amazon_gateway (gateway varchar(1), "date" date, pkgs int);
 --INSERT INTO amazon_gateway VALUES ('A','2017-12-21',20),
@@ -596,7 +599,7 @@ ON a.gateway = b.gateway AND date_part('day',age(a.date, b.date)) = 1;
 
 
 
--- 8) Use the first table to pivot to the second table
+-- 7) Use the first table to pivot to the second table
 --DROP TABLE IF EXISTS amazon_carrier;
 --CREATE TABLE amazon_carrier (carrier varchar(1), "date" date, pkg int);
 --INSERT INTO amazon_carrier VALUES ('U','2017-12-21',10),
@@ -611,14 +614,12 @@ DATE          U    A    D
 2017-12-21     10  NA  20
 ....
 
-SELECT COALESCE(U."date",A."date",D."date"), U.pkg, A.pkg, D.pkg
-FROM (SELECT "date", pkg FROM amazon_carrier WHERE carrier = 'U') U
-FULL JOIN (SELECT "date", pkg FROM amazon_carrier WHERE carrier = 'A') A
-ON U."date" = A."date"
-FULL JOIN (SELECT "date", pkg FROM amazon_carrier WHERE carrier = 'D') D
-ON U."date" = D."date";
 
-
+SELECT date, SUM(CASE WHEN carrier = 'U' THEN pkg ELSE 0 END) AS U,
+SUM(CASE WHEN carrier = 'A' THEN pkg ELSE 0 END) AS A,
+SUM(CASE WHEN carrier = 'D' THEN pkg ELSE 0 END) AS D
+from amazon_carrier
+group by date;
 
 
 

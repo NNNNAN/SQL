@@ -1,3 +1,74 @@
+WITH
+WINDOW FUNCTION
+
+
+0. BASIC
+	584. Find Customer Referee
+	COUNT(*) VS COUNT(id)
+	580. Count Student Number in Departments
+	585. Investments in 2016
+
+
+
+1. Join
+	-- LEFT JOIN
+	175. Combine Two Tables
+	183. Customers Who Never Order
+	-- SELF JOIN
+	181. Employees Earning More Than Their Managers
+	196. Delete Duplicate Emails
+
+	262. Trips and Users
+	570. Managers with at Least 5 Direct Reports
+
+	577. Employee Bonus
+
+
+
+
+
+
+2. N Highest
+	176. Second Highest Salary
+	177. Nth Highest Salary   -----------------------
+
+	-- GROUP
+	184. Department Highest Salary
+
+
+
+3. Rank Order
+	178. Rank Scores
+	574. Winning Candidate
+	578. Get Highest Answer Rate Question
+
+	-- GROUP 
+	185. Department Top Three Salaries
+	586. Customer Placing the Largest Number of Orders
+
+
+
+
+4. Consecutive
+	180. Consecutive Numbers
+	197. Rising Temperature
+
+
+
+
+
+5. Duplicate
+	182. Duplicate Emails
+	196. Delete Duplicate Emails
+
+
+
+
+
+569. Median Employee Salary
+
+
+
 176,177,569,570,571,574,579,627,
 626
 1. Rank

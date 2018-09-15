@@ -675,6 +675,23 @@ ORDER BY category, random();
 Product:
 怎么样决定google express该用多少promotion？promotion该持续多长时间？怎样evaluate这个promotion有没有效？
 
+--------------------------------------------------- COUPANG ---------------------------------------------------
+customer_id, countent_id
+1            1
+2            1
+1            2
+3            2
+5            6
+6            7
+
+SELECT customer_id
+FROM table 
+WHERE content_id NOT IN (SELECT content_id FROM table GROUP BY content_id HAVING COUNT(DISTINCT(customer_id)) > 1)
+GROUP BY customer_id
+ORDER BY COUNT(DISTINCT(content_id))
+LIMIT 1;
+
+
 --------------------------------------------------- FACEBOOK ---------------------------------------------------
 
 -- 1) Content 
@@ -893,10 +910,3 @@ HAVING COUNT(DISTINCT(student)) >= 5;
 
 
 -- EMPTY THEN NULL
-
-
-
-
-
-
-

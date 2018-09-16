@@ -1,4 +1,4 @@
-------------------BASIC FUNCITON --------------
+------------------ SECTION 0: BASIC ------------------
 CREATE TABLE emp_data (
 	name text not null,
 	age integer primary key,
@@ -52,42 +52,57 @@ HAVING COUNT(*)>3
 ORDER BY deptno DESC;
 
 
+SELECT group_id, string_agg(user_id::TEXT, ',') 
+FROM test_case_for_rank 
+GROUP BY group_id;
 
-------------------JOIN --------------
 
-INNER JOIN -- missing join on var bu join
 
-RIGHT JOIN
-LEFT JOIN
-FULL JOIN
-
-CROSS JOIN --A(6) B(6) => 6*6 = 36 -- no on
+------------------ SECTION 1: JOIN ------------------
 
 -- drop table if exists joins_test;
 -- create table joins_test  (id_1 int, id_2 int);
--- insert into joins_test values (1,10),(1,11),(1,10),(2,10),(2,11),(null,10);
+-- insert into joins_test values (1,10),(1,11),(1,10),(2,10),(2,11),(null,10),(null,20);
 -- select * from joins_test;
 
--- TEST 0 => 36 = 6*6
+CROSS JOIN
+-- 49 = 7*7
 --select * from joins_test a, joins_test b;
 --select * from joins_test a cross join joins_test b;
 
--- TEST 1 => dups = 13 = 3*3+2*2 (no missing)
+INNER JOIN 
+-- dups = 13 = 3*3+2*2 (no missing)
+-- missing join on var bu join
 -- select * from joins_test a
 -- inner join joins_test b
 -- on a.id_1 = b.id_1;
 
--- TEST 2 => dups
+-- 7 
+-- select * from joins_test a 
+-- inner join joins_test b
+-- on a.id_1 = b.id_1
+-- and a.id_2 = b.id_2;
+
+RIGHT JOIN
+-- dups = 15 = 3*3 + 2*2 + 2 missing
 -- select * from joins_test a
--- right join (select * from joins_test where id_1 = 1) b
+-- right join joins_test b
 -- on a.id_1 = b.id_1;
 
--- TEST 3 => if you want to dup then don't merge it with dups
+LEFT JOIN
+-- if you want to dup then don't merge it with dups
 -- select * from joins_test a
 -- left join (select distinct(id_1) from joins_test) b
 -- on a.id_1 = b.id_1;
 
-------------------WINDOW FUNCTION --------------
+FULL JOIN
+-- dups = 17 = 3*3 + 2*2 + 2*2 missing 
+-- select * from joins_test a
+-- full join joins_test b
+-- on a.id_1 = b.id_1;
+
+
+------------------ SECTION 2: WINDOW FUNCTION ------------------
 -- use of a window function does not cause rows to become grouped into a single output row 
 -- the rows retain their separate identities.
 ROW_NUMBER() -- NO HOLE AND NO TIE
@@ -105,6 +120,10 @@ SELECT *, ROW_NUMBER() OVER (ORDER BY group_id, score DESC) as row_num FROM test
 
 -- RANK -- RANK MUST HAVE ORDER
 SELECT *, RANK() OVER (ORDER BY score DESC) as all_rank FROM test_case_for_rank;
+-- SAME AS:
+-- SELECT *, (SELECT COUNT(score) from test_case_for_rank b WHERE a.group_id = b.group_id and b.score > a.score)+1 as rank
+-- FROM test_case_for_rank a
+-- ORDER BY a.group_id, a.score DESC;
 
 -- AVG
 SELECT *, avg(score) over() AS all_avg from test_case_for_rank;
@@ -116,8 +135,9 @@ SELECT *, SUM(score) over() AS all_sum from test_case_for_rank;
 SELECT *, SUM(score) over(PARTITION BY group_id) AS reg_sum from test_case_for_rank;
 SELECT *, SUM(score) over(PARTITION BY group_id ORDER BY score DESC) AS reg_sum from test_case_for_rank; -- incremental
 -- SAME AS: 
-SELECT *, (SELECT SUM(b.score) FROM test_case_for_rank b WHERE a.group_id = b.group_id AND b.score >= a.score) 
-FROM test_case_for_rank a ORDER BY a.group_id, a.score DESC;
+-- SELECT *, (SELECT SUM(b.score) FROM test_case_for_rank b WHERE a.group_id = b.group_id AND b.score >= a.score) 
+-- FROM test_case_for_rank a 
+-- ORDER BY a.group_id, a.score DESC;
 
 -- HOLE & TIE
    -- [F]
@@ -136,7 +156,7 @@ FROM test_case_for_rank a ORDER BY a.group_id, a.score DESC;
 
 -- NO HOLE
    -- TIE
-   SELECT a.group_id, a.score, (SELECT COUNT(DISTINCT(b.score)) FROM test_case_for_rank b WHERE a.group_id = b.group_id AND b.score > a.score)+1 as order
+   SELECT a.group_id, a.score, (SELECT COUNT(DISTINCT(b.score)) FROM test_case_for_rank b WHERE a.group_id = b.group_id AND b.score >= a.score) as order
    FROM test_case_for_rank a
    ORDER BY a.group_id, a.score DESC;
 
@@ -146,10 +166,10 @@ FROM test_case_for_rank a ORDER BY a.group_id, a.score DESC;
    ORDER BY group_id, score DESC;
 
 -- FIRST AND LAST
-SELECT a.region_id, a.rest_id
-FROM location a
-where (SELECT count(distinct(b.rest_id)) FROM location b where a.region_id = b.region_id and b.rest_id > a.rest_id)+1 = 1 OR
-      (SELECT count(distinct(b.rest_id)) FROM location b where a.region_id = b.region_id and b.rest_id < a.rest_id)+1 = 1;
+SELECT * 
+FROM test_case_for_rank a
+WHERE (SELECT COUNT(DISTINCT(b.score)) FROM test_case_for_rank b WHERE a.group_id = b.group_id AND b.score >= a.score) = 1
+   OR (SELECT COUNT(DISTINCT(b.score)) FROM test_case_for_rank b WHERE a.group_id = b.group_id AND b.score <= a.score) = 1;
 
 -- 5th IF NO HOLE
 SELECT a.* FROM location a where (SELECT count(distinct(b.rest_id)) FROM location b where b.rest_id > a.rest_id)+1 = 5;
@@ -158,7 +178,7 @@ SELECT a.* FROM location a where (SELECT count(distinct(b.rest_id)) FROM locatio
 
 
 
------------USEFUL FUNCTIONS ----------
+------------------ SECTION 3: USEFUL FUNCTION ------------------
 substring(mkey1 from char_length(mkey1) - 4)
 substring(phone_home::text from 1 for 3)::int
 -- The COALESCE function returns the first of its arguments that is not null
@@ -166,12 +186,12 @@ coalesce(max(date_updated),'1990-01-01')
 string_agg(zip, ', ')
 string_agg(distinct device,',')
 -- SELECT group_id, string_agg(user_id::TEXT, ',') FROM test_case_for_rank GROUP BY group_id;
-SELECT DATE_PART('year', '2012-01-01'::date),EXTRACT(year FROM CURRENT_DATE);
+SELECT DATE_PART('year', '2012-01-01'::date), EXTRACT(year FROM CURRENT_DATE);
 LEAST() GREATEST()
 
 
 
------------DATE FUNCTIONS ----------
+------------------ SECTION 4: DATE FUNCTION ------------------
 -- FIRST DAY [MONDAY/1st]
 -- '2018-08-01 00:00:00-05'
 select date_trunc('month', CURRENT_DATE);
@@ -192,39 +212,22 @@ select date_trunc('month', CURRENT_DATE) - INTERVAL '1 day';
 
 
 
------------WITH STATMENT ----------
+------------------ SECTION 5: WITH STATMENT ------------------
 
-with a as (select * from location)
-select * from region
-inner join a
-on a.region_id = region.region_id;
-
-WITH regional_sales AS (
-                       SELECT region, SUM(amount) AS total_sales
-                       FROM orders
-                       GROUP BY region
-     ), 
-	  top_regions AS (
-                       SELECT region
-                       FROM regional_sales
-                       WHERE total_sales > (SELECT SUM(total_sales)/10 FROM regional_sales)
-     )
-SELECT region,
-       product,
-       SUM(quantity) AS product_units,
-       SUM(amount) AS product_sales
-FROM orders
-WHERE region IN (SELECT region FROM top_regions)
-GROUP BY region, product;
+WITH agg_table AS (
+   SELECT *, ROW_NUMBER() OVER(PARTITION BY group_id ORDER BY score DESC) as _rank_
+   FROM test_case_for_rank
+   )
+SELECT * FROM agg_table
+WHERE _rank_ = 1;
 
 
 
+------------------ SECTION 6: INTERVIEW ------------------
 
 
 
------------ SUMMARY ----------
-
------------ LINKEDIN ----------
+------------------ SECTION 6.1: LINKEDIN ------------------
 
 -- 1) work_history
 
@@ -240,7 +243,7 @@ GROUP BY region, product;
 --INSERT INTO work_history VALUES (4,'Google',2012);
 --INSERT INTO work_history VALUES (5,'Microsoft',2010),(5,'Google',2012);
 
-Q1: count members who ever moved from Microsoft to Google?
+-- Q1: count members who ever moved from Microsoft to Google?
 
 SELECT COUNT(DISTINCT(a.member_id))
 FROM work_history a, work_history b
@@ -248,6 +251,23 @@ WHERE a.member_id = b.member_id
   AND a.company_name = 'Microsoft'
   AND b.company_name = 'Google'
   AND a.start_year < b.start_year;
+
+SELECT COUNT(DISTINCT(a.member_id))
+FROM work_history a
+LEFT JOIN work_history b
+ON a.member_id = b.member_id
+WHERE a.company_name = 'Microsoft'
+  AND b.company_name = 'Google'
+  AND a.start_year < b.start_year;
+
+SELECT COUNT(DISTINCT(a.member_id))
+FROM work_history a
+WHERE a.company_name = 'Microsoft'
+  AND (SELECT COUNT(*) 
+       FROM work_history b 
+       WHERE a.member_id = b.member_id 
+       AND b.company_name = 'Google'
+       AND b.start_year > a.start_year) > 0;
 
 R:
 
@@ -259,7 +279,7 @@ summarise(count =n())
 print count
 
 
-Q2: count members who directly moved from Microsoft to Google? (Microsoft - Linkedin - Google doesnt count)
+-- Q2: count members who directly moved from Microsoft to Google? (Microsoft - Linkedin - Google doesnt count)
 
 WITH new_table AS (
    SELECT *, ROW_NUMBER() OVER(PARTITION BY member_id ORDER BY start_year) AS new_order FROM work_history)
@@ -269,6 +289,16 @@ WHERE a.member_id = b.member_id
   AND a.new_order + 1 = b.new_order
   AND a.company_name = 'Microsoft'
   AND b.company_name = 'Google';
+
+WITH agg_table AS (
+   SELECT *, ROW_NUMBER() OVER(PARTITION BY member_id ORDER BY start_year) as _order_ FROM work_history)
+SELECT *
+FROM agg_table a
+LEFT JOIN agg_table b
+ON a.member_id = b.member_id
+AND a._order_ = b._order_ + 1
+WHERE a.company_name = 'Google'
+AND b.company_name = 'Microsoft';
 
 
 -- 2) linkedin_product
@@ -288,62 +318,29 @@ GROUP BY customer;
 
 
 
-------------------- OTHERS ----------------------------------
--- products（product_id, product_class_id, brand_name, price） 
--- sales(product_id, promotion_id, cutomer_id, total_sales)
--- customer(customer_id, state,...)
--- stores(store_id, ......)
 
-Q1/2:只用一个table group by，order by就能出结果 有一题order by忘了加desc
-Q3: 是问买过productA and productB的所有customer。
-SELECT DISTINCT(c.customer_name)
-FROM sales s
-INNER JOIN customer c
-ON s.product_id = c.product_id
-WHERE s.product_id in ('A','B');
-我这题用了两个join，感觉写的有点长，应该有更好的写法，但一时没想起来。小哥让我想想如果product多于两个，比如五个，应该怎么写。
+------------------ SECTION 6.2: TWITCH ------------------
 
----------------------------------------------------------------
--- sort按照字母规律，不过要求先把S排在最前
-
--- drop table if exists sort_test;
--- create table sort_test (index text);
--- insert into sort_test VALUES ('a');
--- insert into sort_test VALUES ('b');
--- insert into sort_test VALUES ('s');
--- insert into sort_test VALUES ('S');
-
-SELECT * 
-FROM sort_test
-ORDER BY CASE WHEN index in ('S','s') THEN 0 ELSE 1 END, index;
-
-SELECT * 
-FROM sort_test
-ORDER BY (CASE WHEN index in ('s','S') then 1 else 0 end) DESC, index;
-
-------------------------------------------------------------------
--- 一道返回每个学生的最高分，重复按course id
-SELECT * 
-FROM (
-   SELECT student, score, ROW_NUMBER() OVER(PARTITION BY student ORDER BY score DESC, course_id) as _rank_
-   FROM table) A
-WHERE a._rank_ = 1;
-
--- 另一道算running total
-SELECT student, SUM(score) OVER(PARTITION BY student ORDER BY course_id) as running_total
-FROM table;
-
-
-------------------- TWITCH -------------------
 -- DROP TABLE IF EXISTS twitch;
 -- CREATE TABLE twitch ( country varchar(2), duration int);
 -- INSERT INTO twitch VALUES ('us', 850),('us',850),('jp',3600),('us',1000);
--- SELECT * FROM twitch;
+
 -- Q1: AVERAGE DURIATION MINUTE FOR EACH SESSION
 SELECT AVG(duration/60)::INT FROM twitch;
--- Q2: CHOOSE TOP 5 SESSION
-SELECT * FROM twitch ORDER BY duration DESC LIMIT 3; -- ONLY ONE
-SELECT country, RANK() OVER(ORDER BY duration DESC) FROM twitch; -- INCLUDE TIE
+
+-- Q2: CHOOSE TOP 2 SESSION FOR EACH COUNTRY
+-- INCLUDE TIE
+SELECT * FROM (
+SELECT *, RANK() OVER(PARTITION BY country ORDER BY duration DESC) as _rank_
+FROM twitch) AS a
+WHERE a._rank_ <= 2;
+
+-- NO TIE
+SELECT * FROM (
+SELECT *, ROW_NUMBER() OVER(PARTITION BY country ORDER BY duration DESC) as _rank_
+FROM twitch) AS a
+WHERE a._rank_ <= 2;
+
 -- Q3: Histogram
 select floor(duration/(60*5)) as bucket_floor, count(*) as count
 from twitch
@@ -357,16 +354,10 @@ select
 from (select floor(duration/(60*5)) as bucket_floor, floor(duration/(60*5)) + 1 as bucket_ceiling from twitch) a
 group by 1, 2
 order by 1;
--- Q4
 
--- Q5: DIFF BETWEEN 1000
+-- Q4: DIFF BETWEEN 1000
 -- 'us'|'jp'
 -- 'jp'|'us'
-WITH new_table AS (SELECT country, SUM(duration) AS tot FROM twitch GROUP BY country)
-SELECT a.country, b.country
-FROM new_table a, new_table b
-WHERE ABS(a.tot-b.tot) <= 1000
-AND a.country <> b.country;
 
 WITH new_table AS (SELECT country, SUM(duration) AS tot FROM twitch GROUP BY country)
 SELECT a.country, b.country
@@ -374,26 +365,35 @@ FROM new_table a, new_table b
 WHERE ABS(a.tot-b.tot) <= 1000
 AND a.country < b.country;
 
+WITH new_table AS (SELECT country, SUM(duration) AS tot FROM twitch GROUP BY country)
+SELECT a.country, b.country
+FROM new_table a, new_table b
+WHERE a.tot-b.tot <= 1000
+AND a.tot > b.tot
+AND a.country <> b.country;
 
 
 
---------------------------------------------------- OPENTABLE ---------------------------------------------------
+------------------ SECTION 6.3: OPENTABLE ------------------
 
 -- Q1 2nd highest
-WITH rank AS (select generate_series(1,10) as x)
-SELECT a.x 
-FROM rank a 
-WHERE (SELECT COUNT(DISTINCT(b.x)) FROM rank b WHERE b.x < a.x)+1 = 2;
-
 WITH rank AS(select generate_series(1,10) as x)
 SELECT a.x 
 FROM rank a 
-WHERE (SELECT COUNT(DISTINCT(b.x)) FROM rank b WHERE b.x > a.x)+1 = 2;
+WHERE (SELECT COUNT(DISTINCT(b.x)) FROM rank b WHERE b.x > a.x) = 1;
+
+WITH rank AS (select generate_series(1,10) as x),
+     agg_table AS (SELECT *, RANK() OVER(ORDER BY x DESC) as _order_ FROM rank)
+SELECT x
+FROM agg_table
+WHERE _order_ = 2;
 
 -- Q2: 365 days, one device, only IOS
 
 --create table opentable_sql (user_id int, device varchar(10), booking_date date);
---insert into opentable_sql VALUES (1,'IOS','2018-06-01'),(1,'IOS','2018-06-02'),(2,'Android','2018-06-01'),(2,'IOS','2018-06-01'),(2,'IOS','2018-06-01');
+--insert into opentable_sql VALUES (1,'IOS','2018-06-01'),(1,'IOS','2018-06-02'),(2,'Android','2018-06-01'),(2,'IOS','2018-06-01'),(2,'IOS','2018-06-01'),
+--(3,'IOS','2014-06-01'),(3,'IOS','2015-06-01'),(3,'IOS','2016-06-01'),(3,'IOS','2017-06-01'),(3,'IOS','2018-06-01'),
+--(1,'IOS','2014-06-01'),(1,'IOS','2015-06-01'),(1,'IOS','2016-06-01'),(1,'IOS','2017-06-01'),(1,'IOS','2018-06-01');
 
 -- ERROR:  aggregate functions are not allowed in WHERE
 -- string_agg(device,',') has duplicates but no delimeter after the last varchar
@@ -407,7 +407,9 @@ SELECT user_id
 FROM opentable_sql
 WHERE booking_date > current_date - 365
 GROUP BY user_id
-HAVING count(user_id) = SUM(CASE WHEN device = 'IOS' THEN 1 ELSE 0 END) 
+HAVING count(user_id) = SUM(CASE WHEN device = 'IOS' THEN 1 ELSE 0 END);
+-- SUM(CASE WHEN device <> 'IOS' THEN 1 ELSE 0 END) = 0;
+
 
 -- Q3: How to identify users that make a booking once a year for the past 5 years
 
@@ -415,7 +417,7 @@ SELECT user_id
 FROM opentable_sql
 WHERE booking_date > current_date - 365*5
 GROUP BY user_id
-HAVING COUNT(DISTINCT(EXTRACT(YEAR FROM booking_date))) = 5;
+HAVING COUNT(DISTINCT(EXTRACT(YEAR FROM booking_date))) = 5 AND COUNT(*) = 5;
 
 -- 2 years
 WITH AGG AS (
@@ -466,15 +468,14 @@ from opentable_sql_q4) a
 group by user_id, resv_id, new_date;
 
 
-
---------------------------------------------------- AMAZON PREP ---------------------------------------------------
+------------------ SECTION 6.4: AMAZON ------------------
 
 -- 1) am_order (order_id, customer_id, order_datetime, order_amt):
--- a)select top 10 paying customers for given month  
+-- a) select top 10 paying customers for given month  
 
 --DROP TABLE IF EXISTS am_order;
 --CREATE TABLE am_order (order_id int, customer_id int, order_datetime date, order_amt int);
---INSERT INTO am_order VALUES (1,10,'2018-08-01',160),(2,10,'2018-08-02',50),(3,11,'2018-08-01',10),(4,11,'2018-08-01',100),(5,11,'2018-08-01',100);
+--INSERT INTO am_order VALUES (1,10,'2018-08-01',160),(2,10,'2018-08-02',50),(3,11,'2018-08-01',10),(4,11,'2018-08-01',100),(5,11,'2018-08-01',100),(6,12,'2018-08-01',100);
 
 -- only 10
 SELECT customer_id, sum(order_amt) as tot
@@ -484,11 +485,12 @@ GROUP BY customer_id
 ORDER BY sum(order_amt) DESC
 LIMIT 10
 
-SELECT * FROM (
-SELECT customer_id, sum(order_amt) as tot, RANK() OVER(ORDER BY sum(order_amt) desc) as _rank_
-FROM am_order
-GROUP BY customer_id) a
-WHERE a._rank_ = 10;
+-- TOP 10 WITH TIER > 10
+WITH agg_table AS (SELECT customer_id, RANK() OVER(ORDER BY SUM(order_amt) DESC) AS _rank_ 
+                   FROM am_order
+                   GROUP BY customer_id)
+SELECT * FROM agg_table
+WHERE _rank_ <= 10;
 
 -- b) create daily revenue report between given start_date and end_date
   -- output schema: (order_date, number_of_customers, number_of_orders, daily_total_order_amount, mtd_order_amount)
@@ -501,12 +503,12 @@ SELECT a.order_datetime, COUNT(DISTINCT(a.customer_id)) as number_of_customers,
   COUNT(DISTINCT(a.order_id)) as number_of_orders,
   SUM(a.order_amt) as daily_total_order_amount,
   (SELECT SUM(b.order_amt) FROM amazon_orders b 
-   WHERE EXTRACT(YEAR FROM a.order_datetime) = EXTRACT(YEAR FROM b.order_datetime)
-     AND EXTRACT(MONTH FROM a.order_datetime) = EXTRACT(MONTH FROM b.order_datetime)
+   WHERE EXTRACT(YEAR FROM a.order_datetime) = EXTRACT(YEAR FROM b.order_datetime) AND EXTRACT(MONTH FROM a.order_datetime) = EXTRACT(MONTH FROM b.order_datetime)
+     -- b.order_datetime BETWEEN DATE_TRUNC('month',a.order_datetime) AND DATE_TRUNC('month',a.order_datetime) + INTERVAL '1 month' - INTERVAL '1 day')
      AND b.order_datetime <= a.order_datetime) as mtd_order_amount
 FROM amazon_orders a
+WHERE a.order_datetime BETWEEN DATE_TRUNC('month',current_date) - INTERVAL '5 month' AND DATE_TRUNC('month', current_date) - INTERVAL '3 month' - INTERVAL '1 day'
 GROUP BY a.order_datetime;
-
 
 SELECT A.*, SUM(A.daily_total_order_amount) OVER(PARTITION BY EXTRACT(YEAR FROM A.order_datetime), EXTRACT(MONTH FROM A.order_datetime) ORDER BY A.order_datetime) as mtd_order_amount
 FROM ( 
@@ -514,8 +516,65 @@ SELECT order_datetime, COUNT(DISTINCT(customer_id)) as number_of_customers,
        COUNT(DISTINCT(order_id)) as number_of_orders, 
        SUM(order_amt) as daily_total_order_amount
 FROM amazon_orders
+WHERE order_datetime BETWEEN DATE_TRUNC('month',current_date) - INTERVAL '5 month' AND DATE_TRUNC('month', current_date) - INTERVAL '3 month' - INTERVAL '1 day'
 GROUP BY order_datetime) A;
 
+SELECT order_datetime, COUNT(DISTINCT(customer_id)) as number_of_customers, 
+       COUNT(DISTINCT(order_id)) AS number_of_orders, 
+       SUM(order_amt) AS daily_total_order_amount,
+       SUM(SUM(order_amt)) OVER(PARTITION BY EXTRACT(YEAR FROM order_datetime), EXTRACT(MONTH FROM order_datetime) ORDER BY order_datetime) as mtd_order_amount
+FROM amazon_orders
+WHERE order_datetime BETWEEN DATE_TRUNC('month',current_date) - INTERVAL '5 month' AND DATE_TRUNC('month', current_date) - INTERVAL '3 month' - INTERVAL '1 day'
+GROUP BY order_datetime;
+
+
+-- 2) amazon_customer_orders :
+-- customer_id order_id order_day 
+-- 123        27424624    25Dec2011 
+-- 123        89690900    25Dec2010 
+-- 797        12131323    25Dec2010 
+-- 876        67145419    15Dec2011 
+
+--DROP TABLE IF EXISTS amazon_customer_orders;
+--create table amazon_customer_orders (customer_id int, order_id int, order_day date);
+--INSERT INTO amazon_customer_orders VALUES (123,27424624,'2011-12-25'),(123,89690900,'2010-12-25'),(797,12131323,'2010-12-25'),(876,67145419,'2011-12-15');
+
+
+-- a) Write SQL for customers who placed orders on both the days, 25th Dec 2010 and 25th Dec 2011?
+
+SELECT customer_id 
+FROM amazon_customer_orders
+WHERE order_day IN ('2011-12-25','2010-12-25')
+GROUP BY customer_id
+HAVING COUNT(DISTINCT(order_day)) = 2;
+
+SELECT DISTINCT(a.customer_id)
+FROM amazon_customer_orders a, amazon_customer_orders b 
+WHERE a.customer_id = b.customer_id
+AND a.order_day = '2011-12-25' AND b.order_day = '2010-12-25';
+
+-- b) Let's say I can combine two orders that are placed by the same customer within 20 mins of each other, what % of orders can be combined
+
+-- Customer_id order_id     order_datetime 
+-- 1234         4141-4814     25/12/2010:06:15:00 
+-- 1234         4141-4815     25/12/2010:06:20:00 
+-- 1234         4141-4816     25/12/2010:06:41:00 
+-- 1234         4141-4817     25/12/2010:06:50:00 
+-- 8153         2525-1414     26/12/2010:07:13:00 
+-- 8153         2525-1415     26/12/2010:13:10:10   
+
+--DROP TABLE IF EXISTS amazon_customer_orders_b;
+--create table amazon_customer_orders_b (customer_id int, order_id text, order_day TIMESTAMP);
+--INSERT INTO amazon_customer_orders_b VALUES (1234,'4141-4814','2010-12-25 06:15:00'),(1234,'4141-4815','2010-12-25 06:20:00'),(1234,'4141-4816','2010-12-25 06:41:00'),(1234,'4141-4817','2010-12-25 06:50:00'),(8153,'2525-1414','2010-12-26 07:13:00'),(8153,'2525-1415','2010-12-26 13:10:10');
+
+WITH new_table AS (
+select *, ROW_NUMBER() OVER(PARTITION BY customer_id ORDER BY order_day) as _rank_
+from amazon_customer_orders_b)
+SELECT SUM(CASE WHEN a.order_day - b.order_day <= '00:20:00'::interval THEN 1 ELSE 0 END)/COUNT(a.customer_id)::float
+FROM new_table a
+LEFT JOIN new_table b
+ON a.customer_id = b.customer_id
+AND a._rank_ = b._rank_ + 1;
 
 
 -- 2) Select all customers who purchased at least two items on two separate days. 
@@ -548,6 +607,9 @@ WHERE b.departure IS NULL
 -- DUPLICATES
    OR (b.departure IS NOT NULL AND a.departure < a.arrival);
 
+SELECT DISTINCT least(departure,arrival) as X1 ,greatest(departure,arrival) as X2 
+FROM amazon_flight
+ORDER BY x1, x2;
 
 
 
@@ -557,18 +619,37 @@ WHERE b.departure IS NULL
 --                        (2,1,'2018-08-01'),(2,1,'2018-08-05'),(2,1,'2018-08-06'),
 --                        (3,1,'2018-08-01'),(3,1,'2018-08-05'),(3,2,'2018-08-06');
 
-SELECT a.*
+-- CREATE TABLE amazon_order_first_last AS
+-- SELECT a.*
+-- FROM amazon_order_history a
+-- WHERE (SELECT COUNT(*) FROM amazon_order_history b 
+--      WHERE a.customer = b.customer AND a.product = b.product AND b.order_date > a.order_date) = 0
+--   OR (SELECT COUNT(*) FROM amazon_order_history b 
+--      WHERE a.customer = b.customer AND a.product = b.product AND b.order_date < a.order_date) = 0;
+
+-- a).每天各产品类下的order中，是某顾客在该品类首个order的比例
+WITH firstorder AS (
+   SELECT customer, product, min(order_date) as first_order 
+   FROM amazon_order_first_last
+   GROUP BY customer, product)
+SELECT a.order_date, a.product, SUM(CASE WHEN a.order_date = first_order THEN 1 ELSE 0 END)/COUNT(a.customer)::float
 FROM amazon_order_history a
-WHERE (SELECT COUNT(*) FROM amazon_order_history b 
-     WHERE a.customer = b.customer AND a.product = b.product AND b.order_date > a.order_date)+ 1 = 1
-  OR (SELECT COUNT(*) FROM amazon_order_history b 
-     WHERE a.customer = b.customer AND a.product = b.product AND b.order_date < a.order_date)+ 1 = 1;
-
--- a).每天各产品类下的order中，是某顾客在该品类首个order的比例????????
-
+LEFT JOIN firstorder f
+ON a.customer = f.customer
+AND a.product = f.product
+GROUP BY a.order_date, a.product;
 
 -- b).每天所有order中，是某顾客首个order的比例
-
+WITH firstorder AS (
+   SELECT customer, product, min(order_date) as first_order 
+   FROM amazon_order_history
+   GROUP BY customer, product)
+SELECT a.order_date, SUM(CASE WHEN a.order_date = f.first_order THEN 1 ELSE 0 END)/COUNT(a.customer)::float
+FROM amazon_order_history a
+LEFT JOIN firstorder f
+ON a.customer = f.customer
+AND a.product = f.product
+GROUP BY a.order_date;
 
 
 -- 5) 给一个purchase的table，里面有id，purchase_date，price, 求year-to-date 的revenue 按purchase_date 划分 (running sum)
@@ -576,9 +657,14 @@ WHERE (SELECT COUNT(*) FROM amazon_order_history b
 --CREATE TABLE amazon_purchase (id int, purchase_date date, price int);
 --INSERT INTO amazon_purchase VALUES (1,'2018-01-01',10),(2,'2018-01-01',10),(3,'2018-01-07',10),(4,'2017-01-01',10);
 
-SELECT id, purchase_date, SUM(price) OVER(PARTITION BY EXTRACT(YEAR FROM purchase_date) ORDER BY purchase_date) as running_sum
+SELECT *, SUM(price) OVER(PARTITION BY EXTRACT(YEAR FROM purchase_date) ORDER BY purchase_date) as running_sum
 FROM amazon_purchase;
 
+SELECT *, (SELECT SUM(b.price) 
+           FROM amazon_purchase b 
+           WHERE EXTRACT(YEAR FROM a.purchase_date) = EXTRACT(YEAR FROM b.purchase_date)
+           AND b.purchase_date <= a.purchase_date) as _sum_
+FROM amazon_purchase a;
 
 
 -- 6） Use the first three columns of the table to recreate the table (four columns: Pkgs yesterday)
@@ -595,7 +681,9 @@ FROM amazon_purchase;
 SELECT a.*, b.pkgs as pkgs_yesterday
 FROM amazon_gateway a
 LEFT JOIN amazon_gateway b
-ON a.gateway = b.gateway AND date_part('day',age(a.date, b.date)) = 1;
+ON a.gateway = b.gateway 
+AND date_part('day',age(a.date, b.date)) = 1;
+-- AND a.date = b.date + 1;
 
 
 
@@ -626,40 +714,34 @@ group by date;
 Product:
 在在线广告行业，分析问题时会考虑哪些metrics；还有如果已知CTR=5%，怎么判断这个CTR是好是坏
 
-
-
-previous project:
-Tell us about your work experience that is relevant to the position you applied.
-Tell us about the skills you have acquired that are relevant to the position you applied.
-
-BQ:
-Tell me a time when you used the wrong dataset to do data analysis.  
-How do you motivate people?  
-A time where you had a team conflict  
-Why are you applying for this job?
-
 Other Tech:
-R: Data loading from a text file , sub setting , and transforming
+R: Data loading from a text file , sub setting , transforming, visualization, data frames, matrices
 BI, Dimensional Modelling, Statistics
 Very basic Python coding
 confidence intervals...(they work in NLP ,so term counts are important)
-30 min about statistics
 Describe a join to a non-technical person.
 Data warehousing concepts, ETL fundamentals  
 How is variance calculated in a PCA
 Stats questions : what is ttest, forecasting and  optimization techniques.
-R: visualization, data frames, matrices. 
 Math: Probability and forecasting examples.  
 
 
---------------------------------------------------- GOOGLE Product Analyst ---------------------------------------------------
+------------------ SECTION 6.5: GOOGLE ------------------
 
--- 就是求一个group里面最近日期对应的行，用partition by就可以解决了 ---------------?
+-- 1) 就是求一个group里面最近日期对应的行，用partition by就可以解决了
 
-SELECT ROW_NUMBER() OVER(PARTITION BY USER ORDER BY date )
-FROM table;
+WITH table_a AS (SELECT user, ROW_NUMBER() OVER(PARTITION BY user ORDER BY date DESC) AS _rank_ FROM TABLE)
+SELECT *
+FROM TABLE
+WHERE _rank_ = 1;
 
--- 从一个group里面random选十行出来
+SELECT * 
+FROM TABLE
+WHERE (user,date) IN (SELECT user, MAX(date) FROM TABLE GROUP BY user);
+
+
+
+-- 2) 从一个group里面random选十行出来
 
 SELECT * 
 FROM (
@@ -675,7 +757,10 @@ ORDER BY category, random();
 Product:
 怎么样决定google express该用多少promotion？promotion该持续多长时间？怎样evaluate这个promotion有没有效？
 
---------------------------------------------------- COUPANG ---------------------------------------------------
+
+
+
+------------------ SECTION 6.6: COUPANG ------------------
 customer_id, countent_id
 1            1
 2            1
@@ -692,7 +777,7 @@ ORDER BY COUNT(DISTINCT(content_id))
 LIMIT 1;
 
 
---------------------------------------------------- FACEBOOK ---------------------------------------------------
+------------------ SECTION 6.7: FACEBOOK ------------------
 
 -- 1) Content 
 -- content_actions {user_id|content_id|conent_type|target_id} content_type = {"comment", "post", "photo"} #story: post or photo
@@ -873,6 +958,54 @@ Product:
 
 如果你新开发的feature，实现了20%的CTR，你如何评价这个feature是好的，也就是说你怎么评价这个20%是好还是坏？
 在newfeed里加“friend you may know”这个feature好不好。用哪些metrics？
+
+
+
+------------------- OTHERS ----------------------------------
+-- products（product_id, product_class_id, brand_name, price） 
+-- sales(product_id, promotion_id, cutomer_id, total_sales)
+-- customer(customer_id, state,...)
+-- stores(store_id, ......)
+
+Q1/2:只用一个table group by，order by就能出结果 有一题order by忘了加desc
+Q3: 是问买过productA and productB的所有customer。
+SELECT DISTINCT(c.customer_name)
+FROM sales s
+INNER JOIN customer c
+ON s.product_id = c.product_id
+WHERE s.product_id in ('A','B');
+我这题用了两个join，感觉写的有点长，应该有更好的写法，但一时没想起来。小哥让我想想如果product多于两个，比如五个，应该怎么写。
+
+---------------------------------------------------------------
+-- sort按照字母规律，不过要求先把S排在最前
+
+-- drop table if exists sort_test;
+-- create table sort_test (index text);
+-- insert into sort_test VALUES ('a');
+-- insert into sort_test VALUES ('b');
+-- insert into sort_test VALUES ('s');
+-- insert into sort_test VALUES ('S');
+
+SELECT * 
+FROM sort_test
+ORDER BY CASE WHEN index in ('S','s') THEN 0 ELSE 1 END, index;
+
+SELECT * 
+FROM sort_test
+ORDER BY (CASE WHEN index in ('s','S') then 1 else 0 end) DESC, index;
+
+------------------------------------------------------------------
+-- 一道返回每个学生的最高分，重复按course id
+SELECT * 
+FROM (
+   SELECT student, score, ROW_NUMBER() OVER(PARTITION BY student ORDER BY score DESC, course_id) as _rank_
+   FROM table) A
+WHERE a._rank_ = 1;
+
+-- 另一道算running total
+SELECT student, SUM(score) OVER(PARTITION BY student ORDER BY course_id) as running_total
+FROM table;
+
 
 --------------------------------------------------- LEETCODE ---------------------------------------------------
 -- CASE WHEN:
